@@ -1,0 +1,1 @@
+ALTER TABLE `campaigns` ADD `public_form` text DEFAULT 'person' NOT NULL;

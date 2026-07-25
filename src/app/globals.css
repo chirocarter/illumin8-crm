@@ -1,0 +1,207 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --color-canvas: #f6f6f8;
+  --color-card: #ffffff;
+  --color-ink: #1c1c1e;
+  /* The one hover-emphasis colour: quiet text lifts to it, and solid ink
+     buttons shift to it. Light mode drives toward black, dark mode toward a
+     light grey (never #fff — see the .dark block). */
+  --color-ink-hover: #000000;
+  --color-soft: #66666e;
+  --color-faint: #9c9ca4;
+  --color-line: #e7e7ec;
+  --color-hairline: #f0f0f3;
+  --color-hover: #fafafc;
+  --color-well: #eeeef1;
+
+  --color-accent: #d97706;
+  --color-accent-deep: #b45309;
+  --color-accent-soft: #fdf3e3;
+
+  /* Brand gradient — amber warming into rose/red (matches the Illumin8 mark) */
+  --color-brand-from: #f59e0b;
+  --color-brand-to: #c14d63;
+
+  --color-good: #16a34a;
+  --color-good-soft: #ecfdf3;
+  --color-warn: #d97706;
+  --color-warn-soft: #fef7e8;
+  --color-bad: #dc2626;
+  --color-bad-soft: #fef1f1;
+  --color-info: #2563eb;
+  --color-info-soft: #eff4ff;
+  --color-purple: #7c3aed;
+  --color-purple-soft: #f5f0ff;
+
+  /* Layered shadows: a crisp hairline edge + close contact shadow + soft ambient */
+  --shadow-card: 0 0 0 1px rgb(16 16 20 / 0.03), 0 1px 1px rgb(16 16 20 / 0.03), 0 2px 8px rgb(16 16 20 / 0.03), 0 12px 32px -8px rgb(16 16 20 / 0.06);
+  --shadow-lift: 0 0 0 1px rgb(16 16 20 / 0.04), 0 2px 4px rgb(16 16 20 / 0.05), 0 12px 32px -4px rgb(16 16 20 / 0.12);
+
+  --radius-card: 1rem;
+}
+
+/* Dark mode — greyed slate blue with a slight teal lean; amber accent
+   brightened for contrast. Toggled by a `dark` class on <html>,
+   persisted in the i8_theme cookie. */
+.dark {
+  color-scheme: dark;
+
+  --color-canvas: #0f1518;
+  --color-card: #171f24;
+  --color-ink: #e8edef;
+  /* Hover emphasis, NOT pure white — on a dark canvas #fff glares, and muted
+     text jumping straight to full brightness reads as a flash. A light grey
+     one step off the body ink gives the same "this is interactive" signal:
+     quiet text lifts toward it, light filled buttons settle down to it. */
+  --color-ink-hover: #d0d9dd;
+  --color-soft: #94a4ac;
+  --color-faint: #5d6d76;
+  --color-line: #29353c;
+  --color-hairline: #1f2930;
+  --color-hover: #1b242a;
+  --color-well: #131a1e;
+
+  --color-accent: #f59e0b;
+  --color-accent-deep: #fbbf24;
+  --color-accent-soft: #2a2311;
+
+  --color-good: #4ade80;
+  --color-good-soft: #142a1f;
+  --color-warn: #fbbf24;
+  --color-warn-soft: #2b2513;
+  --color-bad: #f87171;
+  --color-bad-soft: #322021;
+  --color-info: #8fb3ff;
+  --color-info-soft: #1a2534;
+  --color-purple: #b19bf5;
+  --color-purple-soft: #262039;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(170 192 200 / 0.07);
+  --shadow-lift: 0 6px 18px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(170 192 200 / 0.11);
+}
+
+/*
+  Shape system — three tiers, no exceptions:
+    • Surfaces (cards, kanban columns):        rounded-card (16px)
+    • Fields, tiles, list rows, mini-panels:   rounded-xl (12px)
+    • Buttons, chips, badges, filter selects:  rounded-full (pills)
+  Pill sizes — exactly two:
+    • Regular: px-4 py-2 text-sm         (actions)
+    • Small:   px-3.5 py-1.5 text-[0.8rem] (chips / filters / nav)
+  Full-width CTAs: rounded-full py-3 text-sm font-semibold.
+*/
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  /* Lining, equal-width figures everywhere — numbers align in tables and metrics */
+  font-variant-numeric: tabular-nums;
+  transition: background-color 250ms ease, color 250ms ease;
+}
+
+/* Quiet, consistent scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+/* Keyboard focus is visible and on-brand; mouse clicks stay clean */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Clean table system used across every list page */
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.tbl th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap;
+}
+.tbl td {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--color-hairline);
+  vertical-align: middle;
+}
+.tbl tbody tr {
+  transition: background-color 120ms ease;
+}
+.tbl tbody tr:hover {
+  background: var(--color-hover);
+}
+.tbl tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Subtle fade-in for page content */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise {
+  animation: rise 240ms ease-out both;
+}
+
+/* Staggered entrance for card grids — each child lands a beat after the last */
+.stagger > * {
+  animation: rise 320ms ease-out both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 30ms; }
+.stagger > *:nth-child(3) { animation-delay: 60ms; }
+.stagger > *:nth-child(4) { animation-delay: 90ms; }
+.stagger > *:nth-child(5) { animation-delay: 120ms; }
+.stagger > *:nth-child(6) { animation-delay: 150ms; }
+.stagger > *:nth-child(7) { animation-delay: 180ms; }
+.stagger > *:nth-child(8) { animation-delay: 210ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .stagger > * {
+    animation: none;
+  }
+}
+
+::selection {
+  background: var(--color-accent-soft);
+}
+
+/* Print / PDF: force the light palette on paper, drop shadows and animation,
+   and keep cards and table rows from splitting across page breaks. */
+@media print {
+  :root, .dark {
+    --color-canvas: #ffffff;
+    --color-card: #ffffff;
+    --color-ink: #111111;
+    --color-soft: #444444;
+    --color-faint: #777777;
+    --color-line: #cccccc;
+    --color-hairline: #e5e5e5;
+  }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #ffffff; }
+  .rise, .stagger > * { animation: none !important; }
+  .shadow-card, .shadow-lift { box-shadow: none !important; }
+  .rounded-card { border: 1px solid var(--color-line); break-inside: avoid; }
+  table { break-inside: auto; }
+  tr, .print-keep { break-inside: avoid; }
+  a { text-decoration: none !important; color: inherit !important; }
+  @page { margin: 1.5cm; }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `activities` ADD `lead_id` integer REFERENCES leads(id);

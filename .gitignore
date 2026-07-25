@@ -1,0 +1,8 @@
+node_modules
+.next
+# The database and all its WAL-mode sidecars (.db, .db-wal, .db-shm, .db-journal).
+# These hold real data and must never be committed — production data lives in Turso.
+data/*.db*
+.env*.local
+tsconfig.tsbuildinfo
+next-env.d.ts

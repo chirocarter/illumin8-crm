@@ -1,0 +1,1 @@
+ALTER TABLE `appointments` ADD `collected` integer DEFAULT false NOT NULL;
