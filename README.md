@@ -82,11 +82,14 @@ The app runs in two database modes with zero code changes:
 1. Push this folder to a GitHub repo.
 2. **Turso** (the database): sign up at turso.tech → create a database →
    copy its URL (`libsql://…`) and create an auth token.
-3. Apply schema + sample data to it from this machine (PowerShell):
+3. Apply schema + starting data to it from this machine (PowerShell):
    ```powershell
    $env:TURSO_DATABASE_URL="libsql://…"; $env:TURSO_AUTH_TOKEN="…"
    npm run db:migrate
-   npm run db:seed   # optional — or start empty and skip this
+   # Clean start for real use — admin login + Albuquerque/clinics + goals, no demo data.
+   # Set ADMIN_PASSWORD first to choose the password, or read the temp one it prints.
+   $env:ADMIN_PASSWORD="choose-a-strong-one"; npm run db:bootstrap
+   # (Or `npm run db:seed` instead to load sample records for a demo.)
    ```
 4. **Vercel**: sign up → "Import project" → pick the repo. Add three
    environment variables: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and
