@@ -115,8 +115,10 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       </div>
 
       {/* Whose numbers: all cities / this city / one person. Sits above
-          everything it governs on mobile. */}
-      <div className="order-4 md:order-none">
+          everything it governs on mobile. Needs its own top margin there —
+          it follows the Events card, which has no bottom margin; on desktop
+          it trails the header's mb-6 and needs nothing. */}
+      <div className="order-4 mt-6 md:order-none md:mt-0">
         <ScopeToggle basePath="/" sp={sp} mode={scope.mode} cityName={city?.name ?? "My city"}
           isAdmin={user.role === "admin"} people={people} meId={user.id} />
       </div>
