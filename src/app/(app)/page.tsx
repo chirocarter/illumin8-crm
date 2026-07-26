@@ -126,8 +126,8 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       {/* Primary action — the thing you actually do in the field (mobile only;
           desktop already has a Log Activity button in the sidebar). */}
       <Link href="/activities/new"
-        className="order-2 mb-5 flex items-center justify-center gap-2 rounded-full bg-ink py-3.5 text-[0.95rem] font-semibold text-canvas shadow-sm transition-all active:scale-[0.99] md:hidden">
-        <Icon name="plus" className="h-5 w-5" /> Log Activity
+        className="btn-glow order-2 mb-5 flex items-center justify-center gap-2 rounded-full py-3.5 text-[0.95rem] font-semibold active:scale-[0.99] md:hidden">
+        <Icon name="plus" className="h-5 w-5 text-accent" /> Log Activity
       </Link>
 
       {/* Pulse row — on mobile it sits below Today's Focus so the screen

@@ -28,7 +28,7 @@ export default function MobileNav() {
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <nav className="flex gap-1.5 overflow-x-auto border-b border-line bg-card px-3 py-2 md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav className="no-scrollbar flex gap-1.5 overflow-x-auto border-b border-line bg-card px-3 py-2 md:hidden">
       {NAV.map((n) => (
         <Link key={n.href} href={n.href}
           className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-[0.8rem] font-medium ${

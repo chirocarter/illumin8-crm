@@ -22,8 +22,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <div className="ml-auto flex items-center gap-2">
               <ThemeToggle initialDark={dark} />
               <Link href="/activities/new"
-                className="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-sm font-medium text-canvas shadow-sm transition-all hover:bg-ink-hover active:scale-[0.98] md:hidden">
-                <Icon name="plus" className="h-4 w-4" /> Log
+                className="btn-glow flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium active:scale-[0.98] md:hidden">
+                <Icon name="plus" className="h-4 w-4 text-accent" /> Log
               </Link>
               <Link href="/settings" className="hidden items-center gap-2 rounded-full px-2 py-1 text-sm text-soft transition-colors hover:text-ink-hover md:flex">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent-deep">

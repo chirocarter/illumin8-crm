@@ -83,6 +83,43 @@
   --shadow-lift: 0 6px 18px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(170 192 200 / 0.11);
 }
 
+/* Primary field action (Log Activity). A light surface ringed by the brand
+   gradient, lit by a soft amber→rose glow — the one button that should pull
+   the eye. The ring uses padding-box/border-box so a gradient can live in a
+   border while the fill stays a flat themed surface. */
+.btn-glow {
+  background:
+    linear-gradient(var(--color-card), var(--color-card)) padding-box,
+    linear-gradient(100deg, var(--color-brand-from), var(--color-brand-to)) border-box;
+  border: 1.5px solid transparent;
+  color: var(--color-ink);
+  box-shadow:
+    0 1px 2px rgb(16 16 20 / 0.04),
+    0 3px 12px -3px rgb(245 158 11 / 0.30),
+    0 6px 22px -6px rgb(193 77 99 / 0.28);
+  transition: box-shadow 220ms ease, transform 180ms ease;
+}
+.btn-glow:hover {
+  box-shadow:
+    0 1px 2px rgb(16 16 20 / 0.05),
+    0 4px 16px -3px rgb(245 158 11 / 0.45),
+    0 10px 30px -6px rgb(193 77 99 / 0.42);
+}
+/* The glow reads as light spill, so it lifts slightly on the dark canvas. */
+.dark .btn-glow {
+  box-shadow:
+    0 2px 10px -2px rgb(245 158 11 / 0.24),
+    0 6px 24px -6px rgb(193 77 99 / 0.30);
+}
+.dark .btn-glow:hover {
+  box-shadow:
+    0 2px 14px -2px rgb(245 158 11 / 0.40),
+    0 10px 34px -6px rgb(193 77 99 / 0.44);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-glow { transition: none; }
+}
+
 /*
   Shape system — three tiers, no exceptions:
     • Surfaces (cards, kanban columns):        rounded-card (16px)
@@ -111,6 +148,21 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line) transparent;
+}
+
+/* Fully hides a scrollbar while keeping the element scrollable — used by the
+   mobile nav, which swipes horizontally and shouldn't show a track.
+   Declared here rather than as Tailwind utilities on the element: the `*` rule
+   above is unlayered, and unlayered rules beat Tailwind's layered utilities in
+   the cascade, so `[scrollbar-width:none]` silently lost to it. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* Keyboard focus is visible and on-brand; mouse clicks stay clean */

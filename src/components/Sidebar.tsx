@@ -41,8 +41,8 @@ export default function Sidebar() {
 
       <div className="px-3 pb-2">
         <Link href="/activities/new"
-          className="flex items-center justify-center gap-1.5 rounded-full bg-ink px-3 py-2 text-sm font-medium text-canvas shadow-sm transition-all hover:bg-ink-hover active:scale-[0.98]">
-          <Icon name="plus" className="h-4 w-4" />
+          className="btn-glow flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium active:scale-[0.98]">
+          <Icon name="plus" className="h-4 w-4 text-accent" />
           Log Activity
         </Link>
       </div>
