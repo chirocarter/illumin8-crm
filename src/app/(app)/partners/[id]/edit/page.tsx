@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/ui";
 import PartnerForm from "@/components/forms/PartnerForm";
@@ -9,7 +10,7 @@ export const metadata = { title: "Edit Partner" };
 
 export default async function EditPartnerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const partner = await db.query.partners.findFirst({ where: eq(s.partners.id, Number(id)) });
+  const partner = await authorize(await db.query.partners.findFirst({ where: eq(s.partners.id, Number(id)) }));
   if (!partner) notFound();
 
   return (

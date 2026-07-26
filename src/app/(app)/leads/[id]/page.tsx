@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { eq } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, Btn, RecordLink } from "@/components/ui";
 import { convertLeadToContact } from "@/app/actions";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function LeadDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  const lead = await db.query.leads.findFirst({ where: eq(s.leads.id, id) });
+  const lead = await authorize(await db.query.leads.findFirst({ where: eq(s.leads.id, id) }));
   if (!lead) notFound();
 
   const [campaign, event, partnerRow, account, location, appointments, activities] = await Promise.all([

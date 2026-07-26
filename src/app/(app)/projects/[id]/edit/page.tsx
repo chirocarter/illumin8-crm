@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/ui";
 import ProjectForm from "@/components/forms/ProjectForm";
@@ -9,7 +10,7 @@ export const metadata = { title: "Edit Project" };
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const project = await db.query.projects.findFirst({ where: eq(s.projects.id, Number(id)) });
+  const project = await authorize(await db.query.projects.findFirst({ where: eq(s.projects.id, Number(id)) }));
   if (!project) notFound();
 
   return (

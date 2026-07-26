@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/ui";
 import AccountForm from "@/components/forms/AccountForm";
@@ -9,7 +10,7 @@ export const metadata = { title: "Edit Account" };
 
 export default async function EditAccountPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const account = await db.query.accounts.findFirst({ where: eq(s.accounts.id, Number(id)) });
+  const account = await authorize(await db.query.accounts.findFirst({ where: eq(s.accounts.id, Number(id)) }));
   if (!account) notFound();
 
   return (

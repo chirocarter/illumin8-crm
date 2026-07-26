@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { and, desc, eq } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, EmptyState } from "@/components/ui";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/dates";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function ContactDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  const contact = await db.query.contacts.findFirst({ where: eq(s.contacts.id, id) });
+  const contact = await authorize(await db.query.contacts.findFirst({ where: eq(s.contacts.id, id) }));
   if (!contact) notFound();
 
   const [account, activities, opportunities, events, tasks, appointments] = await Promise.all([

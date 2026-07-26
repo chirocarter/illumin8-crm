@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import QRCode from "qrcode";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { count, desc, eq, sql } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, LinkableMetric } from "@/components/ui";
 import DocumentsCard from "@/components/DocumentsCard";
@@ -21,7 +22,7 @@ export default async function CampaignDetail({ params, searchParams }: {
   const { id: idStr } = await params;
   const sp = await searchParams;
   const id = Number(idStr);
-  const campaign = await db.query.campaigns.findFirst({ where: eq(s.campaigns.id, id) });
+  const campaign = await authorize(await db.query.campaigns.findFirst({ where: eq(s.campaigns.id, id) }));
   if (!campaign) notFound();
   const formType = normalizePublicForm(campaign.publicForm);
 

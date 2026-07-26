@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { count, desc, eq, sql } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, LinkableMetric, Btn, Field, inputCls } from "@/components/ui";
 import { recordDropBoxPickup } from "@/app/actions";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function PartnerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  const partner = await db.query.partners.findFirst({ where: eq(s.partners.id, id) });
+  const partner = await authorize(await db.query.partners.findFirst({ where: eq(s.partners.id, id) }));
   if (!partner) notFound();
 
   const [account, contact, location, campaigns, events, leadCount, apptStats, lunchAndLearns, activities, winners] = await Promise.all([

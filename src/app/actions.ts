@@ -11,7 +11,8 @@ import { eq } from "drizzle-orm";
 import { nowISO, todayISO, addDays } from "@/lib/dates";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
 import { normalizePublicForm } from "@/lib/taxonomy";
-import { activeCityId, CITY_COOKIE } from "@/lib/scope";
+import { activeCityId, canAccessCity, CITY_COOKIE } from "@/lib/scope";
+import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 
 /**
  * City + owner stamped onto every record created here: the city the user is
@@ -21,6 +22,22 @@ import { activeCityId, CITY_COOKIE } from "@/lib/scope";
 async function stamp(): Promise<{ cityId: number | null; userId: number }> {
   const user = await requireUser();
   return { cityId: await activeCityId(), userId: user.id };
+}
+
+/**
+ * Authorization for writes. `requireUser()` only proves someone is signed in;
+ * without this, any user could overwrite another city's record by posting a
+ * different id. Call before every update/delete that takes an id from the form.
+ *
+ * Throws (rather than redirecting) so a forged request fails loudly instead of
+ * silently succeeding.
+ */
+type OwnedTable = SQLiteTable & { id: SQLiteColumn; cityId: SQLiteColumn };
+async function assertOwned(table: OwnedTable, id: number): Promise<void> {
+  await requireUser();
+  const [row] = await db.select({ cityId: table.cityId }).from(table).where(eq(table.id, id)).limit(1);
+  if (!row) throw new Error("Not found");
+  if (!(await canAccessCity(row.cityId as number | null))) throw new Error("Not authorized");
 }
 
 // ---- FormData helpers ----
@@ -74,6 +91,7 @@ export async function createAccount(fd: FormData) {
 export async function updateAccount(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.accounts, id);
   await db.update(s.accounts).set(accountValues(fd)).where(eq(s.accounts.id, id));
   done(`/accounts/${id}`);
 }
@@ -105,6 +123,7 @@ export async function createContact(fd: FormData) {
 export async function updateContact(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.contacts, id);
   await db.update(s.contacts).set(contactValues(fd)).where(eq(s.contacts.id, id));
   done(`/contacts/${id}`);
 }
@@ -387,6 +406,7 @@ export async function createTask(fd: FormData) {
 export async function updateTask(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.tasks, id);
   await db.update(s.tasks).set({
     title: str(fd, "title") ?? "Untitled task",
     dueDate: str(fd, "dueDate"),
@@ -398,6 +418,7 @@ export async function updateTask(fd: FormData) {
 export async function setTaskStatus(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.tasks, id);
   const status = str(fd, "status") ?? "Open";
   await db.update(s.tasks).set({
     status,
@@ -435,6 +456,7 @@ export async function createOpportunity(fd: FormData) {
 export async function updateOpportunity(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.opportunities, id);
   const existing = await db.query.opportunities.findFirst({ where: eq(s.opportunities.id, id) });
   const stage = str(fd, "stage") ?? existing?.stage ?? "Prospect Identified";
   await db.update(s.opportunities).set({
@@ -448,6 +470,7 @@ export async function updateOpportunity(fd: FormData) {
 export async function setOpportunityStage(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.opportunities, id);
   const stage = str(fd, "stage")!;
   await db.update(s.opportunities).set({
     stage,
@@ -487,6 +510,7 @@ export async function createPartner(fd: FormData) {
 export async function updatePartner(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.partners, id);
   await db.update(s.partners).set(partnerValues(fd)).where(eq(s.partners.id, id));
   done(`/partners/${id}`);
 }
@@ -495,6 +519,7 @@ export async function updatePartner(fd: FormData) {
 export async function recordDropBoxPickup(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.partners, id);
   const cards = num(fd, "cards") ?? 0;
   const partner = await db.query.partners.findFirst({ where: eq(s.partners.id, id) });
   if (!partner) done("/partners");
@@ -545,6 +570,7 @@ export async function createCampaign(fd: FormData) {
 export async function updateCampaign(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.campaigns, id);
   await db.update(s.campaigns).set(campaignValues(fd)).where(eq(s.campaigns.id, id));
   done(`/campaigns/${id}`);
 }
@@ -585,6 +611,7 @@ export async function createEvent(fd: FormData) {
 export async function updateEvent(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.events, id);
   const existing = await db.query.events.findFirst({ where: eq(s.events.id, id) });
   const status = str(fd, "status") ?? existing?.status ?? "Idea";
   await db.update(s.events).set({
@@ -600,6 +627,7 @@ export async function updateEvent(fd: FormData) {
 export async function saveEventOutcome(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.events, id);
   const existing = await db.query.events.findFirst({ where: eq(s.events.id, id) });
   const followUpRequired = bool(fd, "followUpRequired");
   await db.update(s.events).set({
@@ -643,6 +671,7 @@ export async function createLead(fd: FormData) {
 export async function updateLead(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.leads, id);
   await db.update(s.leads).set(leadValues(fd)).where(eq(s.leads.id, id));
   done(`/leads/${id}`);
 }
@@ -652,6 +681,7 @@ export async function updateLead(fd: FormData) {
 export async function convertLeadToContact(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.leads, id);
   const lead = await db.query.leads.findFirst({ where: eq(s.leads.id, id) });
   if (!lead) done("/leads");
   const [contact] = await db.insert(s.contacts).values({
@@ -720,6 +750,7 @@ export async function createAppointment(fd: FormData) {
 export async function updateAppointment(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.appointments, id);
   const values = apptValues(fd);
   await db.update(s.appointments).set(values).where(eq(s.appointments.id, id));
   await syncLead(values.leadId, values.status);
@@ -729,6 +760,7 @@ export async function updateAppointment(fd: FormData) {
 export async function setAppointmentStatus(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.appointments, id);
   const status = str(fd, "status")!;
   const appt = await db.query.appointments.findFirst({ where: eq(s.appointments.id, id) });
   await db.update(s.appointments).set({ status }).where(eq(s.appointments.id, id));
@@ -853,6 +885,7 @@ export async function createProject(fd: FormData) {
 export async function updateProject(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.projects, id);
   await db.update(s.projects).set(projectValues(fd)).where(eq(s.projects.id, id));
   done(`/projects/${id}`);
 }
@@ -860,6 +893,7 @@ export async function updateProject(fd: FormData) {
 export async function setProjectStatus(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
+  await assertOwned(s.projects, id);
   await db.update(s.projects).set({ status: str(fd, "status") ?? "Active" }).where(eq(s.projects.id, id));
   done(`/projects/${id}`);
 }

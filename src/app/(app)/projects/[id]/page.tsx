@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { and, desc, eq } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, EmptyState, Btn, selectCls } from "@/components/ui";
 import DocumentsCard from "@/components/DocumentsCard";
@@ -20,7 +21,7 @@ export default async function ProjectDetail({ params, searchParams }: {
   const { id: idStr } = await params;
   const sp = await searchParams;
   const id = Number(idStr);
-  const project = await db.query.projects.findFirst({ where: eq(s.projects.id, id) });
+  const project = await authorize(await db.query.projects.findFirst({ where: eq(s.projects.id, id) }));
   if (!project) notFound();
 
   const [account, updates, docs, tasks] = await Promise.all([

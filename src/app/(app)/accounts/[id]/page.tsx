@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { and, count, desc, eq, sum, sql } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, LinkableMetric, EmptyState } from "@/components/ui";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/dates";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function AccountDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  const account = await db.query.accounts.findFirst({ where: eq(s.accounts.id, id) });
+  const account = await authorize(await db.query.accounts.findFirst({ where: eq(s.accounts.id, id) }));
   if (!account) notFound();
 
   const [contacts, opportunities, events, leads, appointments, activities, tasks, campaigns, partner, location, tagRows, activityCount, apptStats] =

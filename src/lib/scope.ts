@@ -11,6 +11,7 @@
 //     whole organization or narrow to one person.
 import "server-only";
 import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { and, asc, eq, type SQL } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
@@ -131,6 +132,38 @@ export function scopeConds(t: Owned, scope?: { cityId?: number | null; userId?: 
   if (scope?.cityId) conds.push(eq(t.cityId, scope.cityId));
   if (scope?.userId) conds.push(eq(t.userId, scope.userId));
   return conds;
+}
+
+// ---------- Record-level authorization ----------
+
+/**
+ * May the signed-in user touch this record? Guards against IDOR: without it,
+ * any authenticated user could read or overwrite another city's records just by
+ * changing the id in a URL. Filtering a query by id alone is authentication,
+ * not authorization — this supplies the missing half.
+ *
+ * Rules: admins reach every city; members are confined to their own. Records
+ * predating the city columns (cityId null) stay reachable so nothing 404s.
+ */
+export async function canAccessCity(cityId: number | null | undefined): Promise<boolean> {
+  const user = await getSessionUser();
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (cityId == null) return true;
+  return cityId === user.cityId;
+}
+
+/**
+ * Returns the record if the viewer may see it, otherwise triggers a 404 —
+ * deliberately indistinguishable from "doesn't exist", so probing ids can't be
+ * used to enumerate what lives in another city.
+ *
+ *   const account = await authorize(await db.query.accounts.findFirst(...));
+ */
+export async function authorize<T extends { cityId?: number | null } | undefined>(record: T): Promise<NonNullable<T>> {
+  if (!record) notFound();
+  if (!(await canAccessCity(record.cityId))) notFound();
+  return record as NonNullable<T>;
 }
 
 /**

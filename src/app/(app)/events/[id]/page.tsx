@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { and, count, desc, eq } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, LinkableMetric, Btn, Field, inputCls } from "@/components/ui";
 import { saveEventOutcome } from "@/app/actions";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function EventDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  const event = await db.query.events.findFirst({ where: eq(s.events.id, id) });
+  const event = await authorize(await db.query.events.findFirst({ where: eq(s.events.id, id) }));
   if (!event) notFound();
 
   const [account, contact, opportunity, campaign, partnerRow, leads, appointments, tasks, activities] = await Promise.all([

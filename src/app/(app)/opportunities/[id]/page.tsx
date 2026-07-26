@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
+import { authorize } from "@/lib/scope";
 import { and, desc, eq } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, EmptyState, Btn, selectCls } from "@/components/ui";
 import { setOpportunityStage } from "@/app/actions";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function OpportunityDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  const opp = await db.query.opportunities.findFirst({ where: eq(s.opportunities.id, id) });
+  const opp = await authorize(await db.query.opportunities.findFirst({ where: eq(s.opportunities.id, id) }));
   if (!opp) notFound();
 
   const [account, contact, campaign, location, activities, events, tasks] = await Promise.all([
