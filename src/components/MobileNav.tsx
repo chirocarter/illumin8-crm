@@ -31,8 +31,8 @@ export default function MobileNav() {
     <nav className="no-scrollbar flex gap-1.5 overflow-x-auto border-b border-line bg-card px-3 py-2 md:hidden">
       {NAV.map((n) => (
         <Link key={n.href} href={n.href}
-          className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-[0.8rem] font-medium ${
-            isActive(n.href) ? "bg-ink text-canvas" : "bg-hairline text-soft"
+          className={`pill-idle whitespace-nowrap rounded-full px-3.5 py-1.5 text-[0.8rem] font-medium ${
+            isActive(n.href) ? "pill-active" : "bg-hairline text-soft"
           }`}>
           {n.label}
         </Link>

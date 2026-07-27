@@ -14,7 +14,7 @@ export default function RangeNav({ basePath, from, to }: { basePath: string; fro
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <Link href={link(prev)} className={pillSm}>← Previous week</Link>
       <Link href={link(thisWeek)}
-        className={isThisWeek ? pillSm + " !bg-ink !text-canvas" : pillSm}>
+        className={isThisWeek ? pillSm + " pill-active" : pillSm}>
         This week
       </Link>
       <Link href={link(next)} className={pillSm}>Next week →</Link>

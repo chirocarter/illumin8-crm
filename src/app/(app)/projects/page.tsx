@@ -34,7 +34,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
 
   const shown = statusFilter ? rows : rows.filter((r) => r.status !== "Archived");
   const chip = (href: string, label: string, active: boolean) => (
-    <Link key={label} href={href} className={active ? pillSm + " !bg-ink !text-canvas" : pillSm}>{label}</Link>
+    <Link key={label} href={href} className={active ? pillSm + " pill-active" : pillSm}>{label}</Link>
   );
 
   return (

@@ -131,8 +131,8 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
       {/* Controls (hidden on print) */}
       <div className="mb-5 flex flex-wrap items-center gap-2 print:hidden">
-        <Link href={periodLink("week", 0)} className={period === "week" ? pillSm + " !bg-ink !text-canvas" : pillSm}>Weekly</Link>
-        <Link href={periodLink("month", 0)} className={period === "month" ? pillSm + " !bg-ink !text-canvas" : pillSm}>Monthly</Link>
+        <Link href={periodLink("week", 0)} className={period === "week" ? pillSm + " pill-active" : pillSm}>Weekly</Link>
+        <Link href={periodLink("month", 0)} className={period === "month" ? pillSm + " pill-active" : pillSm}>Monthly</Link>
         <span className="mx-1 h-4 w-px bg-line" />
         <Link href={periodLink(period, offset - 1)} className={pillSm}>← Previous</Link>
         <Link href={periodLink(period, 0)} className={pillSm}>Current</Link>

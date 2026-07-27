@@ -120,6 +120,34 @@
   .btn-glow { transition: none; }
 }
 
+/* Selected state for tabs and toggles. Rather than stamping a solid black (or,
+   in dark mode, solid white) oval onto the page, the chosen option keeps the
+   page's own surface and is ringed by the brand gradient — lit from within by
+   a soft inset glow, so the light reads as coming from inside the pill.
+   The ring is a real border painted by a border-box gradient (not a masked
+   pseudo-element — a mask cuts a rectangular hole, which leaves the ring
+   visibly thicker at a pill's rounded caps than along its straight edges). */
+.pill-active {
+  background:
+    linear-gradient(var(--color-card), var(--color-card)) padding-box,
+    linear-gradient(100deg, var(--color-brand-from), var(--color-brand-to)) border-box;
+  border: 1px solid transparent;
+  color: var(--color-ink);
+  box-shadow:
+    inset 0 0 12px -2px rgb(245 158 11 / 0.40),
+    inset 0 0 6px -1px rgb(193 77 99 / 0.32);
+}
+/* Idle pills carry the same transparent 1px border so selecting one never
+   changes its size. Paired with .pill-active — keep the widths in step. */
+.pill-idle {
+  border: 1px solid transparent;
+}
+.dark .pill-active {
+  box-shadow:
+    inset 0 0 12px -2px rgb(245 158 11 / 0.34),
+    inset 0 0 7px -1px rgb(193 77 99 / 0.28);
+}
+
 /*
   Shape system — three tiers, no exceptions:
     • Surfaces (cards, kanban columns):        rounded-card (16px)

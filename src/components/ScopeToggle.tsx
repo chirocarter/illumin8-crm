@@ -39,8 +39,8 @@ export default function ScopeToggle({
       key={label}
       href={to}
       aria-current={active ? "page" : undefined}
-      className={`rounded-full px-3.5 py-1.5 text-[0.8rem] font-medium transition-colors ${
-        active ? "bg-ink text-canvas" : "text-soft hover:bg-hairline hover:text-ink-hover"
+      className={`pill-idle rounded-full px-3 py-1.5 text-[0.8rem] font-medium transition-colors ${
+        active ? "pill-active" : "text-soft hover:bg-hairline hover:text-ink-hover"
       }`}
     >
       {label}

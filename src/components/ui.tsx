@@ -53,7 +53,7 @@ const btnStyles = {
 
 /** Small pill — chips, filters, week nav. The only other sanctioned pill size. */
 export const pillSm =
-  "rounded-full bg-card px-3.5 py-1.5 text-[0.8rem] font-medium text-soft shadow-card transition-colors hover:text-ink-hover";
+  "pill-idle rounded-full bg-card px-3.5 py-1.5 text-[0.8rem] font-medium text-soft shadow-card transition-colors hover:text-ink-hover";
 type BtnVariant = keyof typeof btnStyles;
 
 export function BtnLink({ href, variant = "primary", children }: { href: string; variant?: BtnVariant; children: React.ReactNode }) {

@@ -27,9 +27,9 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
         </>} />
 
       <div className="mb-3 flex flex-wrap gap-2">
-        <Link href="/events" className={!spStr(sp, "needsOutcome") && !spStr(sp, "upcoming") ? pillSm + " !bg-ink !text-canvas" : pillSm}>All</Link>
-        <Link href="/events?upcoming=1" className={spStr(sp, "upcoming") ? pillSm + " !bg-ink !text-canvas" : pillSm}>Upcoming</Link>
-        <Link href="/events?needsOutcome=1" className={spStr(sp, "needsOutcome") ? pillSm + " !bg-ink !text-canvas" : pillSm + " !text-accent-deep"}>
+        <Link href="/events" className={!spStr(sp, "needsOutcome") && !spStr(sp, "upcoming") ? pillSm + " pill-active" : pillSm}>All</Link>
+        <Link href="/events?upcoming=1" className={spStr(sp, "upcoming") ? pillSm + " pill-active" : pillSm}>Upcoming</Link>
+        <Link href="/events?needsOutcome=1" className={spStr(sp, "needsOutcome") ? pillSm + " pill-active" : pillSm + " !text-accent-deep"}>
           Needs outcomes
         </Link>
       </div>

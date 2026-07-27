@@ -17,7 +17,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const due = spStr(sp, "due");
 
   const chip = (href: string, label: string, active: boolean) => (
-    <Link href={href} className={active ? pillSm + " !bg-ink !text-canvas" : pillSm}>
+    <Link href={href} className={active ? pillSm + " pill-active" : pillSm}>
       {label}
     </Link>
   );

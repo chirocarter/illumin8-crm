@@ -65,7 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <button type="submit"
                       className={`rounded-full px-3.5 py-1.5 text-[0.8rem] font-medium transition-colors ${
                         c.id === current?.id
-                          ? "bg-ink text-canvas"
+                          ? "pill-active"
                           : "border border-line bg-card text-soft hover:bg-hairline hover:text-ink-hover"
                       }`}>
                       {c.name}
