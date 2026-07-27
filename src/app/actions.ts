@@ -1026,6 +1026,18 @@ function parseCSV(text: string): string[][] {
   return rows;
 }
 
+/** Identity for duplicate detection. Deliberately name + phone + email, not
+ *  name alone: the same business can legitimately appear twice with different
+ *  contact details (e.g. on both a partners list and a leads list), and those
+ *  are distinct records. Phone is reduced to digits so reformatting between
+ *  exports ("+1 505 555 0100" vs "5055550100") still matches. */
+const normText = (v: string | null) => (v ?? "").trim().toLowerCase();
+const normPhone = (v: string | null) => (v ?? "").replace(/\D/g, "");
+const accountKey = (name: string, phone: string | null, email: string | null) =>
+  `${normText(name)}|${normPhone(phone)}|${normText(email)}`;
+const contactKey = (first: string, last: string, phone: string | null, email: string | null) =>
+  `${normText(first)}|${normText(last)}|${normPhone(phone)}|${normText(email)}`;
+
 export async function importCSV(fd: FormData) {
   const own = await stamp(); // imports land in the city you're working in
   const entity = str(fd, "entity");
@@ -1042,19 +1054,34 @@ export async function importCSV(fd: FormData) {
     return null;
   };
 
-  let imported = 0;
+  // Everything already on file, fetched once. Rows are added as we go, so a
+  // file containing its own duplicates is caught too — not just re-imports.
+  const seen = new Set<string>();
+  const cityFilter = own.cityId ? eq(s.accounts.cityId, own.cityId) : undefined;
+
+  let imported = 0, skipped = 0;
   if (entity === "accounts") {
+    const existing = await db
+      .select({ name: s.accounts.name, phone: s.accounts.phone, email: s.accounts.email })
+      .from(s.accounts).where(cityFilter);
+    for (const a of existing) seen.add(accountKey(a.name, a.phone, a.email));
+
     for (const r of rows.slice(1)) {
       const name = get(r, "name", "businessname", "business", "company");
       if (!name) continue;
+      const phone = get(r, "phone", "phonenumber");
+      const email = get(r, "email");
+      const key = accountKey(name, phone, email);
+      if (seen.has(key)) { skipped++; continue; }
+      seen.add(key);
       await db.insert(s.accounts).values({
         name,
         vertical: get(r, "vertical", "industry", "type") ?? "Other",
         area: get(r, "area", "location") ?? "Other",
         address: get(r, "address"),
         website: get(r, "website", "url"),
-        phone: get(r, "phone", "phonenumber"),
-        email: get(r, "email"),
+        phone,
+        email,
         status: get(r, "status") ?? "New Prospect",
         source: get(r, "source") ?? "CSV Import",
         notes: get(r, "notes"),
@@ -1063,17 +1090,30 @@ export async function importCSV(fd: FormData) {
       imported++;
     }
   } else if (entity === "contacts") {
+    const existing = await db
+      .select({ firstName: s.contacts.firstName, lastName: s.contacts.lastName,
+                phone: s.contacts.phone, email: s.contacts.email })
+      .from(s.contacts).where(own.cityId ? eq(s.contacts.cityId, own.cityId) : undefined);
+    for (const c of existing) seen.add(contactKey(c.firstName, c.lastName, c.phone, c.email));
+
     for (const r of rows.slice(1)) {
       const first = get(r, "firstname", "first");
       const full = get(r, "name", "fullname");
       if (!first && !full) continue;
       const [f, ...rest] = (first ?? full!).split(" ");
+      const firstName = first ?? f;
+      const lastName = get(r, "lastname", "last") ?? (first ? "" : rest.join(" "));
+      const phone = get(r, "phone", "phonenumber");
+      const email = get(r, "email");
+      const key = contactKey(firstName, lastName, phone, email);
+      if (seen.has(key)) { skipped++; continue; }
+      seen.add(key);
       await db.insert(s.contacts).values({
-        firstName: first ?? f,
-        lastName: get(r, "lastname", "last") ?? (first ? "" : rest.join(" ")),
+        firstName,
+        lastName,
         title: get(r, "title", "role"),
-        phone: get(r, "phone", "phonenumber"),
-        email: get(r, "email"),
+        phone,
+        email,
         contactType: get(r, "contacttype", "type") ?? "Other",
         source: get(r, "source") ?? "CSV Import",
         notes: get(r, "notes"),
@@ -1082,5 +1122,5 @@ export async function importCSV(fd: FormData) {
       imported++;
     }
   }
-  done(`/settings/import?imported=${imported}`);
+  done(`/settings/import?imported=${imported}&skipped=${skipped}`);
 }

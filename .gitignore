@@ -4,5 +4,7 @@ node_modules
 # These hold real data and must never be committed — production data lives in Turso.
 data/*.db*
 .env*.local
+# Database dumps taken before destructive operations — real customer data.
+backups/
 tsconfig.tsbuildinfo
 next-env.d.ts
