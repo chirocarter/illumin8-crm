@@ -399,9 +399,11 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
                       setAccountId(a.id);
                       setNewAccountName(null);
                       setContactId(null);
-                      const hasContacts = contacts.some((c) => c.accountId === a.id);
-                      // touch AND note flows offer the who step; results/dropbox go to their own screens
-                      go((flow === "touch" || flow === "note") && hasContacts ? "contact" : afterWho());
+                      // Always ask who you spoke to — even when the business has
+                      // no contacts on file yet, since that visit is usually how
+                      // the first one gets captured. The screen offers "add" and
+                      // "skip", so it is never a dead end.
+                      go(flow === "touch" || flow === "note" ? "contact" : afterWho());
                     }}>
                     {a.name}
                   </button>
@@ -454,6 +456,11 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
 
       {phase === "contact" && (accountId || newAccountName) && (
         <Screen title="Who did you talk to?" sub={accountName ?? undefined}>
+          {accountContacts.length === 0 && (
+            <p className="pb-1 text-center text-sm text-soft">
+              No contacts on file here yet — add whoever you spoke with.
+            </p>
+          )}
           {accountContacts.map((c) => (
             <button key={c.id} className={tile(contactId === c.id)}
               onClick={() => { setContactId(c.id); setLeadId(null); setNewContact(null); go(afterWho()); }}>
