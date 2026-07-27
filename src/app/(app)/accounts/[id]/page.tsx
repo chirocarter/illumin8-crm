@@ -1,4 +1,6 @@
 import Link from "next/link";
+import RecordActions from "@/components/RecordActions";
+import type { SP } from "@/lib/lists";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { authorize } from "@/lib/scope";
@@ -9,7 +11,11 @@ import { qs } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
-export default async function AccountDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function AccountDetail({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<SP>;
+}) {
+  const sp = await searchParams;
   const { id: idStr } = await params;
   const id = Number(idStr);
   const account = await authorize(await db.query.accounts.findFirst({ where: eq(s.accounts.id, id) }));
@@ -226,6 +232,8 @@ export default async function AccountDetail({ params }: { params: Promise<{ id: 
           </Card>
         </div>
       </div>
+
+      <RecordActions kind="account" id={id} name={account.name} sp={sp} />
     </div>
   );
 }

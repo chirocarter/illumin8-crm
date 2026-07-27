@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import RecordActions from "@/components/RecordActions";
+import type { SP } from "@/lib/lists";
 import { db, schema as s } from "@/db";
 import { authorize } from "@/lib/scope";
 import { eq } from "drizzle-orm";
@@ -9,7 +11,11 @@ import { qs } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
-export default async function LeadDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function LeadDetail({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<SP>;
+}) {
+  const sp = await searchParams;
   const { id: idStr } = await params;
   const id = Number(idStr);
   const lead = await authorize(await db.query.leads.findFirst({ where: eq(s.leads.id, id) }));
@@ -123,6 +129,8 @@ export default async function LeadDetail({ params }: { params: Promise<{ id: str
           )}
         </Card>
       </div>
+
+      <RecordActions kind="lead" id={id} name={`${lead.firstName} ${lead.lastName}`.trim()} sp={sp} />
     </div>
   );
 }

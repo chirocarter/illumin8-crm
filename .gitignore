@@ -8,3 +8,6 @@ data/*.db*
 backups/
 tsconfig.tsbuildinfo
 next-env.d.ts
+
+# Hosted database credentials for CLI scripts — never commit.
+.env.turso

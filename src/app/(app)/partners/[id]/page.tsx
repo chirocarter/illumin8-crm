@@ -1,4 +1,6 @@
 import Link from "next/link";
+import RecordActions from "@/components/RecordActions";
+import type { SP } from "@/lib/lists";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { authorize } from "@/lib/scope";
@@ -10,7 +12,11 @@ import { qs } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
-export default async function PartnerDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function PartnerDetail({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<SP>;
+}) {
+  const sp = await searchParams;
   const { id: idStr } = await params;
   const id = Number(idStr);
   const partner = await authorize(await db.query.partners.findFirst({ where: eq(s.partners.id, id) }));
@@ -181,6 +187,8 @@ export default async function PartnerDetail({ params }: { params: Promise<{ id: 
           )}
         </div>
       </div>
+
+      <RecordActions kind="partner" id={id} name={account?.name ?? 'this partner'} sp={sp} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import RecordActions from "@/components/RecordActions";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { authorize } from "@/lib/scope";
@@ -125,6 +126,8 @@ export default async function ProjectDetail({ params, searchParams }: {
           </Card>
         </div>
       </div>
+
+      <RecordActions kind="project" id={id} name={project.name} sp={sp} />
     </div>
   );
 }

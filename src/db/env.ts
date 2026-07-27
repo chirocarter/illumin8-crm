@@ -4,7 +4,11 @@ import fs from "fs";
 import path from "path";
 
 export function loadEnvLocal() {
-  for (const file of [".env.local", ".env"]) {
+  // .env.turso holds the hosted-database credentials and is read ONLY here, by
+  // CLI scripts (migrate / bootstrap / backup). It is deliberately not a file
+  // Next.js auto-loads: if these lived in .env.local, `npm run dev` would point
+  // the local dev server at production and you'd edit live data by accident.
+  for (const file of [".env.turso", ".env.local", ".env"]) {
     const p = path.join(process.cwd(), file);
     if (!fs.existsSync(p)) continue;
     for (const line of fs.readFileSync(p, "utf8").split(/\r?\n/)) {

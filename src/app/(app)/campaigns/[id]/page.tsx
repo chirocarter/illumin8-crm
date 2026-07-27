@@ -1,4 +1,5 @@
 import Link from "next/link";
+import RecordActions from "@/components/RecordActions";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import QRCode from "qrcode";
@@ -177,6 +178,8 @@ export default async function CampaignDetail({ params, searchParams }: {
           </Card>
         </div>
       </div>
+
+      <RecordActions kind="campaign" id={id} name={campaign.name} sp={sp} />
     </div>
   );
 }

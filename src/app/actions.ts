@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { db, schema as s } from "@/db";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { nowISO, todayISO, addDays } from "@/lib/dates";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
 import { normalizePublicForm } from "@/lib/taxonomy";
@@ -702,6 +702,119 @@ export async function convertLeadToContact(fd: FormData) {
   done(`/contacts/${contact.id}`);
 }
 
+// =============== Reclassifying records ===============
+//
+// For fixing the wrong *kind* of record — a person imported as a business, a
+// business captured as a lead. Unlike convertLeadToContact (which promotes a
+// lead and keeps it for attribution), these MOVE the record: history is
+// re-pointed at the new record and the original is removed, because the
+// original was simply a mistake.
+
+/** Re-points rows from one FK column to another, e.g. accountId -> contactId. */
+async function repoint(
+  refs: { table: SQLiteTable; from: SQLiteColumn; fromField: string; toField: string }[],
+  oldId: number, newId: number,
+) {
+  for (const r of refs) {
+    await db.update(r.table)
+      .set({ [r.fromField]: null, [r.toField]: newId } as never)
+      .where(eq(r.from, oldId));
+  }
+}
+
+/** A business row that was really a person. */
+export async function convertAccountToContact(fd: FormData) {
+  const id = num(fd, "id")!;
+  await assertOwned(s.accounts, id);
+  const acct = await db.query.accounts.findFirst({ where: eq(s.accounts.id, id) });
+  if (!acct) done("/accounts");
+
+  const [contact] = await db.insert(s.contacts).values({
+    // The business name IS the person's name in this mistake.
+    ...splitName(acct!.name),
+    phone: acct!.phone,
+    email: acct!.email,
+    contactType: "Other",
+    source: acct!.source ?? "Reclassified from business",
+    notes: [acct!.notes, acct!.ownerName ? `Was listed as business owner: ${acct!.ownerName}` : null]
+      .filter(Boolean).join(" · ") || null,
+    ...(await stamp()),
+    cityId: acct!.cityId,
+    userId: acct!.userId ?? (await requireUser()).id,
+  }).returning();
+
+  await repoint([
+    { table: s.activities, from: s.activities.accountId, fromField: "accountId", toField: "contactId" },
+    { table: s.tasks, from: s.tasks.accountId, fromField: "accountId", toField: "contactId" },
+    { table: s.opportunities, from: s.opportunities.accountId, fromField: "accountId", toField: "contactId" },
+    { table: s.events, from: s.events.accountId, fromField: "accountId", toField: "contactId" },
+    { table: s.appointments, from: s.appointments.accountId, fromField: "accountId", toField: "contactId" },
+  ], id, contact.id);
+
+  // Anything still tied to the old business row is detached / removed.
+  await deleteViaPlan("account", id);
+  done(`/contacts/${contact.id}`);
+}
+
+/** A person row that was really a business. */
+export async function convertContactToAccount(fd: FormData) {
+  const id = num(fd, "id")!;
+  await assertOwned(s.contacts, id);
+  const c = await db.query.contacts.findFirst({ where: eq(s.contacts.id, id) });
+  if (!c) done("/contacts");
+
+  const [acct] = await db.insert(s.accounts).values({
+    name: `${c!.firstName} ${c!.lastName}`.trim(),
+    phone: c!.phone,
+    email: c!.email,
+    status: "New Prospect",
+    source: c!.source ?? "Reclassified from contact",
+    notes: c!.notes,
+    ...(await stamp()),
+    cityId: c!.cityId,
+    userId: c!.userId ?? (await requireUser()).id,
+  }).returning();
+
+  await repoint([
+    { table: s.activities, from: s.activities.contactId, fromField: "contactId", toField: "accountId" },
+    { table: s.tasks, from: s.tasks.contactId, fromField: "contactId", toField: "accountId" },
+    { table: s.opportunities, from: s.opportunities.contactId, fromField: "contactId", toField: "accountId" },
+    { table: s.events, from: s.events.contactId, fromField: "contactId", toField: "accountId" },
+    { table: s.appointments, from: s.appointments.contactId, fromField: "contactId", toField: "accountId" },
+  ], id, acct.id);
+
+  await deleteViaPlan("contact", id);
+  done(`/accounts/${acct.id}`);
+}
+
+/** A lead that was really a business. */
+export async function convertLeadToAccount(fd: FormData) {
+  const id = num(fd, "id")!;
+  await assertOwned(s.leads, id);
+  const lead = await db.query.leads.findFirst({ where: eq(s.leads.id, id) });
+  if (!lead) done("/leads");
+
+  const [acct] = await db.insert(s.accounts).values({
+    name: `${lead!.firstName} ${lead!.lastName}`.trim(),
+    phone: lead!.phone,
+    email: lead!.email,
+    status: "New Prospect",
+    source: lead!.source ? `Converted from lead (${lead!.source})` : "Converted from lead",
+    notes: lead!.notes,
+    ...(await stamp()),
+    cityId: lead!.cityId,
+    userId: lead!.userId ?? (await requireUser()).id,
+  }).returning();
+
+  await repoint([
+    { table: s.activities, from: s.activities.leadId, fromField: "leadId", toField: "accountId" },
+    { table: s.appointments, from: s.appointments.leadId, fromField: "leadId", toField: "accountId" },
+  ], id, acct.id);
+
+  await deleteViaPlan("lead", id);
+  done(`/accounts/${acct.id}`);
+}
+
 // =============== Appointments ===============
 function apptValues(fd: FormData) {
   return {
@@ -1000,6 +1113,151 @@ export async function setUserRole(fd: FormData) {
   await db.update(s.users).set({ role }).where(eq(s.users.id, id));
   done("/settings?saved=1");
 }
+
+// =============== Deleting records ===============
+//
+// Deleting never silently destroys history. Rows that merely *point* at the
+// record (activities, tasks, opportunities…) are detached — they survive with
+// the link cleared. Rows that cannot exist without it (the partner record, tag
+// links, whose FK is NOT NULL) are removed alongside it. Callers see both
+// counts before confirming.
+
+// `field` is the Drizzle property name (what .set() expects); `col` is the
+// column object (what .where() expects). Both are needed.
+type SoftRef = { col: SQLiteColumn; table: SQLiteTable; field: string; label: string };
+type HardRef = SoftRef;
+
+const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
+  account: {
+    detach: [
+      { table: s.contacts, col: s.contacts.accountId, field: "accountId", label: "contacts" },
+      { table: s.opportunities, col: s.opportunities.accountId, field: "accountId", label: "opportunities" },
+      { table: s.events, col: s.events.accountId, field: "accountId", label: "events" },
+      { table: s.activities, col: s.activities.accountId, field: "accountId", label: "activities" },
+      { table: s.tasks, col: s.tasks.accountId, field: "accountId", label: "tasks" },
+      { table: s.campaigns, col: s.campaigns.accountId, field: "accountId", label: "campaigns" },
+      { table: s.appointments, col: s.appointments.accountId, field: "accountId", label: "appointments" },
+      { table: s.leads, col: s.leads.accountId, field: "accountId", label: "leads" },
+      { table: s.projects, col: s.projects.accountId, field: "accountId", label: "projects" },
+      { table: s.documents, col: s.documents.accountId, field: "accountId", label: "documents" },
+    ],
+    // partners.accountId and account_tags.accountId are NOT NULL — they cannot
+    // be detached, so they go with the business.
+    remove: [
+      { table: s.partners, col: s.partners.accountId, field: "accountId", label: "partner record" },
+      { table: s.accountTags, col: s.accountTags.accountId, field: "accountId", label: "tag links" },
+    ],
+  },
+  contact: {
+    detach: [
+      { table: s.opportunities, col: s.opportunities.contactId, field: "contactId", label: "opportunities" },
+      { table: s.events, col: s.events.contactId, field: "contactId", label: "events" },
+      { table: s.activities, col: s.activities.contactId, field: "contactId", label: "activities" },
+      { table: s.tasks, col: s.tasks.contactId, field: "contactId", label: "tasks" },
+      { table: s.appointments, col: s.appointments.contactId, field: "contactId", label: "appointments" },
+      { table: s.partners, col: s.partners.mainContactId, field: "mainContactId", label: "partner main-contact links" },
+    ],
+    remove: [{ table: s.contactTags, col: s.contactTags.contactId, field: "contactId", label: "tag links" }],
+  },
+  lead: {
+    detach: [
+      { table: s.activities, col: s.activities.leadId, field: "leadId", label: "activities" },
+      { table: s.appointments, col: s.appointments.leadId, field: "leadId", label: "appointments" },
+    ],
+    remove: [],
+  },
+  opportunity: {
+    detach: [
+      { table: s.events, col: s.events.opportunityId, field: "opportunityId", label: "events" },
+      { table: s.activities, col: s.activities.opportunityId, field: "opportunityId", label: "activities" },
+      { table: s.tasks, col: s.tasks.opportunityId, field: "opportunityId", label: "tasks" },
+    ],
+    remove: [],
+  },
+  event: {
+    detach: [
+      { table: s.activities, col: s.activities.eventId, field: "eventId", label: "activities" },
+      { table: s.tasks, col: s.tasks.eventId, field: "eventId", label: "tasks" },
+      { table: s.leads, col: s.leads.eventId, field: "eventId", label: "leads" },
+      { table: s.appointments, col: s.appointments.eventId, field: "eventId", label: "appointments" },
+    ],
+    remove: [],
+  },
+  campaign: {
+    detach: [
+      { table: s.events, col: s.events.campaignId, field: "campaignId", label: "events" },
+      { table: s.activities, col: s.activities.campaignId, field: "campaignId", label: "activities" },
+      { table: s.leads, col: s.leads.campaignId, field: "campaignId", label: "leads" },
+      { table: s.appointments, col: s.appointments.campaignId, field: "campaignId", label: "appointments" },
+      { table: s.opportunities, col: s.opportunities.campaignId, field: "campaignId", label: "opportunities" },
+      { table: s.documents, col: s.documents.campaignId, field: "campaignId", label: "documents" },
+    ],
+    remove: [],
+  },
+  partner: {
+    detach: [
+      { table: s.events, col: s.events.partnerId, field: "partnerId", label: "events" },
+      { table: s.activities, col: s.activities.partnerId, field: "partnerId", label: "activities" },
+      { table: s.leads, col: s.leads.partnerId, field: "partnerId", label: "leads" },
+      { table: s.appointments, col: s.appointments.partnerId, field: "partnerId", label: "appointments" },
+    ],
+    remove: [],
+  },
+  project: {
+    detach: [
+      { table: s.activities, col: s.activities.projectId, field: "projectId", label: "activities" },
+      { table: s.tasks, col: s.tasks.projectId, field: "projectId", label: "tasks" },
+      { table: s.documents, col: s.documents.projectId, field: "projectId", label: "documents" },
+    ],
+    remove: [],
+  },
+};
+
+const MAIN_TABLE: Record<string, SQLiteTable & { id: SQLiteColumn; cityId: SQLiteColumn }> = {
+  account: s.accounts, contact: s.contacts, lead: s.leads, opportunity: s.opportunities,
+  event: s.events, campaign: s.campaigns, partner: s.partners, project: s.projects,
+};
+
+/** What deleting this record would touch — powers the confirmation screen. */
+export async function deletionImpact(kind: string, id: number) {
+  const plan = DELETE_PLAN[kind];
+  if (!plan) return { detach: [], remove: [] };
+  const tally = async (r: SoftRef) =>
+    Number((await db.select({ c: count() }).from(r.table).where(eq(r.col, id)))[0]?.c ?? 0);
+  const detach = [] as { label: string; n: number }[];
+  const remove = [] as { label: string; n: number }[];
+  for (const r of plan.detach) { const n = await tally(r); if (n) detach.push({ label: r.label, n }); }
+  for (const r of plan.remove) { const n = await tally(r); if (n) remove.push({ label: r.label, n }); }
+  return { detach, remove };
+}
+
+/** Detach soft references, remove dependent rows, delete the record.
+ *  Internal — callers must have already authorized the id. */
+async function deleteViaPlan(kind: string, id: number) {
+  const table = MAIN_TABLE[kind];
+  const plan = DELETE_PLAN[kind];
+  if (!table || !plan) return;
+  for (const r of plan.detach) {
+    await db.update(r.table).set({ [r.field]: null } as never).where(eq(r.col, id));
+  }
+  for (const r of plan.remove) await db.delete(r.table).where(eq(r.col, id));
+  await db.delete(table).where(eq(table.id, id));
+}
+
+export async function deleteRecord(fd: FormData) {
+  const kind = str(fd, "kind") ?? "";
+  const id = num(fd, "id")!;
+  const table = MAIN_TABLE[kind];
+  if (!table || !DELETE_PLAN[kind]) redirect("/");
+  await assertOwned(table, id); // same city / admin, or it throws
+  await deleteViaPlan(kind, id);
+  done(str(fd, "returnTo") ?? LIST_PATH[kind] ?? "/");
+}
+
+const LIST_PATH: Record<string, string> = {
+  account: "/accounts", contact: "/contacts", lead: "/leads", opportunity: "/opportunities",
+  event: "/events", campaign: "/campaigns", partner: "/partners", project: "/projects",
+};
 
 // =============== CSV import (accounts & contacts) ===============
 function parseCSV(text: string): string[][] {

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import RecordActions from "@/components/RecordActions";
+import type { SP } from "@/lib/lists";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { authorize } from "@/lib/scope";
@@ -11,7 +13,11 @@ import { OPPORTUNITY_STAGES } from "@/lib/taxonomy";
 
 export const dynamic = "force-dynamic";
 
-export default async function OpportunityDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function OpportunityDetail({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<SP>;
+}) {
+  const sp = await searchParams;
   const { id: idStr } = await params;
   const id = Number(idStr);
   const opp = await authorize(await db.query.opportunities.findFirst({ where: eq(s.opportunities.id, id) }));
@@ -140,6 +146,8 @@ export default async function OpportunityDetail({ params }: { params: Promise<{ 
           </Card>
         </div>
       </div>
+
+      <RecordActions kind="opportunity" id={id} name={opp.name} sp={sp} />
     </div>
   );
 }
