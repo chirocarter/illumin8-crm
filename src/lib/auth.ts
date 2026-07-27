@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
@@ -42,13 +43,21 @@ export function verifySessionToken(token: string | undefined): { email: string }
   return { email };
 }
 
-export async function getSessionUser() {
+/**
+ * The signed-in user, looked up once per request.
+ *
+ * Wrapped in React's `cache()` because this sits behind almost everything —
+ * scoping, authorization, every picker. Without memoization a single page can
+ * re-run it a dozen-plus times, which is invisible against a local SQLite file
+ * but costs a full network round trip each time against hosted Turso.
+ */
+export const getSessionUser = cache(async () => {
   const store = await cookies();
   const session = verifySessionToken(store.get(SESSION_COOKIE)?.value);
   if (!session) return null;
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, session.email) });
   return user ?? null;
-}
+});
 
 export async function requireUser() {
   const user = await getSessionUser();

@@ -18,6 +18,9 @@ export async function login(formData: FormData) {
   const store = await cookies();
   store.set(SESSION_COOKIE, createSessionToken(user.email), {
     httpOnly: true,
+    // HTTPS-only in production so the session can't ride an insecure request.
+    // Off in dev, where localhost is plain http.
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 30 * 86400,

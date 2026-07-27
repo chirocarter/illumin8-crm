@@ -33,7 +33,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             className="w-full rounded-full bg-ink py-3 text-sm font-semibold text-canvas shadow-sm transition-all hover:bg-ink-hover active:scale-[0.99]">
             Sign in
           </button>
-          <p className="pt-1 text-center text-xs text-faint">Default password: illumin8 — change it in Settings.</p>
+          {/* Deliberately no credential hint here — this page is public. */}
+          <p className="pt-1 text-center text-xs text-faint">Ask an admin if you need access.</p>
         </form>
       </div>
     </div>

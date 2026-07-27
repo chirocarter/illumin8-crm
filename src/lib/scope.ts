@@ -10,6 +10,7 @@
 //     Center and the Performance Report offer this, and it can widen to the
 //     whole organization or narrow to one person.
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
@@ -25,13 +26,14 @@ export const CITY_COOKIE = "i8_city";
 
 export type City = { id: number; name: string };
 
-export async function allCities(): Promise<City[]> {
+/** Memoized per request — see the note on `activeCity` below. */
+export const allCities = cache(async (): Promise<City[]> => {
   return db
     .select({ id: s.cities.id, name: s.cities.name })
     .from(s.cities)
     .where(eq(s.cities.active, true))
     .orderBy(asc(s.cities.name));
-}
+});
 
 /**
  * The one city the signed-in user is currently working in.
@@ -39,7 +41,12 @@ export async function allCities(): Promise<City[]> {
  * pinned to the city on their user record. Falls back to the first city so the
  * app still works if an assignment is missing.
  */
-export async function activeCity(): Promise<City | null> {
+/**
+ * Memoized per request. A page can call this many times over — every picker on
+ * a form runs it through `cityWhere` — and each call otherwise costs two DB
+ * round trips. Free locally, expensive against hosted Turso.
+ */
+export const activeCity = cache(async (): Promise<City | null> => {
   const [cities, user] = await Promise.all([allCities(), getSessionUser()]);
   if (cities.length === 0) return null;
   const find = (id: number | null | undefined) => cities.find((c) => c.id === id);
@@ -49,7 +56,7 @@ export async function activeCity(): Promise<City | null> {
     return find(cookieCity) ?? find(user.cityId) ?? cities[0];
   }
   return find(user?.cityId) ?? cities[0];
-}
+});
 
 export async function activeCityId(): Promise<number | null> {
   return (await activeCity())?.id ?? null;

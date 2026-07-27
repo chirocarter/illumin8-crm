@@ -780,7 +780,8 @@ export async function switchCity(fd: FormData) {
   const city = id ? await db.query.cities.findFirst({ where: eq(s.cities.id, id) }) : null;
   if (city) {
     (await cookies()).set(CITY_COOKIE, String(city.id), {
-      httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365,
+      httpOnly: true, secure: process.env.NODE_ENV === "production",
+      sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365,
     });
   }
   done(str(fd, "returnTo") ?? "/settings?saved=1");
