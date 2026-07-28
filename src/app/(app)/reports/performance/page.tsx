@@ -122,12 +122,16 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader title="Performance Report"
-        subtitle={<span>{label} · {scope.label} · <span className="text-faint">every number opens its source records</span></span>}
-        actions={<PrintButton />} />
+      {/* Screen header. Hidden on paper — the print masthead below replaces it,
+          otherwise the PDF carries the title twice plus a dead "Print" button. */}
+      <div className="print:hidden">
+        <PageHeader title="Performance Report"
+          subtitle={<span>{label} · {scope.label} · <span className="text-faint">every number opens its source records</span></span>}
+          actions={<PrintButton />} />
 
-      <ScopeToggle basePath="/reports/performance" sp={sp} mode={scope.mode} cityName={city?.name ?? "My city"}
-        isAdmin={user.role === "admin"} people={people} meId={user.id} />
+        <ScopeToggle basePath="/reports/performance" sp={sp} mode={scope.mode} cityName={city?.name ?? "My city"}
+          isAdmin={user.role === "admin"} people={people} meId={user.id} />
+      </div>
 
       {/* Controls (hidden on print) */}
       <div className="mb-5 flex flex-wrap items-center gap-2 print:hidden">
@@ -139,10 +143,17 @@ export default async function PerformanceReport({ searchParams }: { searchParams
         {offset < 0 && <Link href={periodLink(period, offset + 1)} className={pillSm}>Next →</Link>}
       </div>
 
-      {/* Print-only heading so the PDF is self-describing */}
-      <div className="mb-5 hidden print:block">
-        <h1 className="text-2xl font-semibold">Illumin8 Outreach — Performance Report</h1>
-        <p className="text-sm text-soft">{scope.label} · {label} ({fmtDateLong(cur.from)} – {fmtDateLong(cur.to)})</p>
+      {/* Print masthead — the PDF has to explain itself to someone who wasn't
+          the one who generated it: who, what period, and when it was run. */}
+      <div className="print-masthead mb-6 hidden print:block">
+        <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-soft">Illumin8 Chiropractic</p>
+        <h1 className="mt-1 text-[1.6rem] font-semibold leading-tight tracking-tight">Community Outreach — Performance Report</h1>
+        <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-1 text-[0.8rem] text-soft">
+          <span><span className="text-faint">Scope:</span> <span className="font-medium text-ink">{scope.label}</span></span>
+          <span><span className="text-faint">Period:</span> <span className="font-medium text-ink">{label}</span> ({fmtDateLong(cur.from)} – {fmtDateLong(cur.to)})</span>
+          <span><span className="text-faint">Compared with:</span> {prevLabel}</span>
+          <span><span className="text-faint">Generated:</span> {fmtDateLong(todayISO())}</span>
+        </div>
       </div>
 
       {/* Headline money */}
@@ -232,9 +243,16 @@ export default async function PerformanceReport({ searchParams }: { searchParams
         </table>
       </Card>
 
-      <p className="mt-4 text-xs text-faint print:mt-6">
+      <p className="mt-4 text-xs text-faint print:mt-5 print:border-t print:border-line print:pt-3">
+        <span className="hidden font-medium text-soft print:inline">How these numbers are defined — </span>
         Definitions match the Command Center and weekly reports — one source of truth. “Booked” counts appointments created in
         the period; “charged” and “collected” sum their amounts. Goal targets are the weekly goals from Settings, scaled to the period length.
+      </p>
+
+      {/* Signature line — these reports go to leadership, so the paper copy
+          states who it covers and who produced it. */}
+      <p className="hidden text-[0.7rem] text-faint print:mt-2 print:block">
+        Illumin8 Chiropractic · Community Outreach · {scope.label} · prepared by {user.name}
       </p>
     </div>
   );

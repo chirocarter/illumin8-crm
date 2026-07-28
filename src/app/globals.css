@@ -276,12 +276,37 @@ body {
     --color-hairline: #e5e5e5;
   }
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { background: #ffffff; }
+  /* Slightly denser than screen so a week fits one page without shrinking to
+     illegibility, and the report reads like a document rather than a webpage. */
+  body { background: #ffffff; font-size: 11.5px; line-height: 1.45; }
   .rise, .stagger > * { animation: none !important; }
-  .shadow-card, .shadow-lift { box-shadow: none !important; }
-  .rounded-card { border: 1px solid var(--color-line); break-inside: avoid; }
-  table { break-inside: auto; }
+  .shadow-card, .shadow-lift, .btn-glow { box-shadow: none !important; }
+
+  /* Cards become quiet ruled panels — no rounding, no fill, hairline only. */
+  .rounded-card {
+    border: 1px solid var(--color-line);
+    border-radius: 4px;
+    break-inside: avoid;
+  }
+  /* Gradient rings and glows are screen affordances; on paper they smear. */
+  .pill-active, .btn-glow { background: none !important; border-color: var(--color-line) !important; }
+
+  table { break-inside: auto; width: 100%; }
   tr, .print-keep { break-inside: avoid; }
+  .tbl th {
+    font-size: 0.62rem;
+    padding: 0.3rem 0.7rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .tbl td { padding: 0.34rem 0.7rem; }
+  .tbl tbody tr:hover { background: none; }
+
+  /* Never strand a section heading at the foot of a page. */
+  h1, h2, h3 { break-after: avoid; break-inside: avoid; }
+  .print-masthead { break-after: avoid; }
+
+  /* Links are dead on paper — render them as plain text, no blue, no underline. */
   a { text-decoration: none !important; color: inherit !important; }
-  @page { margin: 1.5cm; }
+
+  @page { margin: 1.4cm 1.3cm; }
 }
