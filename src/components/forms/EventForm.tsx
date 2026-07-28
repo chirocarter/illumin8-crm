@@ -10,7 +10,12 @@ type Event = typeof schema.events.$inferSelect;
 export default async function EventForm({ action, event, defaults }: {
   action: (fd: FormData) => Promise<void>;
   event?: Event;
-  defaults?: { accountId?: number; contactId?: number; opportunityId?: number; partnerId?: number; campaignId?: number };
+  defaults?: {
+    accountId?: number; contactId?: number; opportunityId?: number;
+    partnerId?: number; campaignId?: number;
+    /** "YYYY-MM-DDTHH:mm" — prefilled when adding from a calendar day */
+    startsAt?: string;
+  };
 }) {
   const [accounts, contacts, opportunities, campaigns, partners, locations] = await Promise.all([
     db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] }),
@@ -43,8 +48,12 @@ export default async function EventForm({ action, event, defaults }: {
               {EVENT_STATUSES.map((v) => <option key={v}>{v}</option>)}
             </select>
           </Field>
-          <Field label="Date & time">
-            <input name="startsAt" type="datetime-local" defaultValue={e?.startsAt?.slice(0, 16) ?? ""} className={inputCls} />
+          <Field label="Starts">
+            <input name="startsAt" type="datetime-local"
+              defaultValue={e?.startsAt?.slice(0, 16) ?? defaults?.startsAt ?? ""} className={inputCls} />
+          </Field>
+          <Field label="Ends" hint="Optional — set it for meetings and anything with a fixed finish">
+            <input name="endsAt" type="datetime-local" defaultValue={e?.endsAt?.slice(0, 16) ?? ""} className={inputCls} />
           </Field>
           <Field label="Where (venue / address)">
             <input name="locationText" defaultValue={e?.locationText ?? ""} className={inputCls} />

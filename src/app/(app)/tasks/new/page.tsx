@@ -31,7 +31,8 @@ export default async function NewTaskPage({ searchParams }: { searchParams: Prom
             </Field>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Due date">
-                <input name="dueDate" type="date" defaultValue={todayISO()} className={inputCls} />
+                {/* ?dueDate= is set when adding from a specific calendar day */}
+                <input name="dueDate" type="date" defaultValue={pre("dueDate") || todayISO()} className={inputCls} />
               </Field>
               <Field label="Business">
                 <select name="accountId" defaultValue={pre("accountId")} className={selectCls}>

@@ -614,6 +614,12 @@ function eventValues(fd: FormData) {
     clinicLocationId: num(fd, "clinicLocationId"),
     locationText: str(fd, "locationText"),
     startsAt: str(fd, "startsAt"),
+    // Ignore an end that isn't after the start — a backwards block would render
+    // as a negative-height slot on the calendar.
+    endsAt: (() => {
+      const start = str(fd, "startsAt"), end = str(fd, "endsAt");
+      return end && start && end > start ? end : null;
+    })(),
     expectedAttendees: num(fd, "expectedAttendees") ?? 0,
     notes: str(fd, "notes"),
     followUpRequired: bool(fd, "followUpRequired"),

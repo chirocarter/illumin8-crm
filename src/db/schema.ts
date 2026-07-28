@@ -158,6 +158,9 @@ export const events = sqliteTable("events", {
   clinicLocationId: integer("clinic_location_id").references(() => locations.id),
   locationText: text("location_text"), // where the event physically happens
   startsAt: text("starts_at"),
+  // Optional end time, so a meeting can be 2:00–3:00pm. Null means the event is
+  // a point in time (or all-day) rather than a block.
+  endsAt: text("ends_at"),
   status: text("status").notNull().default("Idea"),
   bookedAt: text("booked_at"), // set when status first moves to Booked/Confirmed — powers "Events Booked" metrics
   expectedAttendees: integer("expected_attendees").notNull().default(0),

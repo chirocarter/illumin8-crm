@@ -17,7 +17,12 @@ export default async function NewEventPage({ searchParams }: { searchParams: Pro
     <div className="mx-auto max-w-3xl">
       <PageHeader title="New Event" />
       <EventForm action={createEvent}
-        defaults={{ accountId: n("accountId"), contactId: n("contactId"), opportunityId: n("opportunityId"), partnerId: n("partnerId"), campaignId: n("campaignId") }} />
+        defaults={{
+          accountId: n("accountId"), contactId: n("contactId"), opportunityId: n("opportunityId"),
+          partnerId: n("partnerId"), campaignId: n("campaignId"),
+          // ?startsAt=YYYY-MM-DDTHH:mm — set when adding from a calendar day
+          startsAt: spStr(sp, "startsAt"),
+        }} />
     </div>
   );
 }
