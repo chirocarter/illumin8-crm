@@ -10,7 +10,10 @@ import { db, schema as s } from "@/db";
 import { count, eq } from "drizzle-orm";
 import { nowISO, todayISO, addDays } from "@/lib/dates";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
-import { normalizePublicForm } from "@/lib/taxonomy";
+import {
+  ACCOUNT_STATUSES, INTEREST_LEVELS, LEAD_APPT_STATUSES,
+  RELATIONSHIP_STRENGTHS, normalizePublicForm,
+} from "@/lib/taxonomy";
 import { activeCityId, canAccessCity, CITY_COOKIE } from "@/lib/scope";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 
@@ -324,6 +327,27 @@ export async function logActivity(fd: FormData) {
         source: "Added while logging activity",
         ...own,
       });
+    }
+  }
+
+  // Standing update captured on the "where do things stand" step. Sent only
+  // when actually changed, so an untouched screen never rewrites a record.
+  // Applies to the business when there is one, otherwise to the lead.
+  const newRelationship = str(fd, "newRelationship");
+  const newStatus = str(fd, "newStatus");
+  if (accountId) {
+    if (newRelationship && (RELATIONSHIP_STRENGTHS as readonly string[]).includes(newRelationship)) {
+      await db.update(s.accounts).set({ relationshipStrength: newRelationship }).where(eq(s.accounts.id, accountId));
+    }
+    if (newStatus && (ACCOUNT_STATUSES as readonly string[]).includes(newStatus)) {
+      await db.update(s.accounts).set({ status: newStatus }).where(eq(s.accounts.id, accountId));
+    }
+  } else if (leadId) {
+    if (newRelationship && (INTEREST_LEVELS as readonly string[]).includes(newRelationship)) {
+      await db.update(s.leads).set({ interestLevel: newRelationship }).where(eq(s.leads.id, leadId));
+    }
+    if (newStatus && (LEAD_APPT_STATUSES as readonly string[]).includes(newStatus)) {
+      await db.update(s.leads).set({ apptStatus: newStatus }).where(eq(s.leads.id, leadId));
     }
   }
 

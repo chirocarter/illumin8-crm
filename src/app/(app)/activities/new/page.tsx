@@ -30,9 +30,14 @@ export default async function LogActivityPage({ searchParams }: { searchParams: 
 
   return (
     <ActivityWizard
-      accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+      accounts={accounts.map((a) => ({
+        id: a.id, name: a.name, status: a.status, relationship: a.relationshipStrength,
+      }))}
       contacts={contacts.map((c) => ({ id: c.id, name: `${c.firstName} ${c.lastName}`.trim(), accountId: c.accountId, title: c.title }))}
-      leads={leads.map((l) => ({ id: l.id, name: `${l.firstName} ${l.lastName}`.trim(), phone: l.phone }))}
+      leads={leads.map((l) => ({
+        id: l.id, name: `${l.firstName} ${l.lastName}`.trim(), phone: l.phone,
+        apptStatus: l.apptStatus, interest: l.interestLevel,
+      }))}
       opportunities={opportunities.map((o) => ({ id: o.id, name: o.name, accountId: o.accountId }))}
       events={events.map((e) => ({ id: e.id, name: e.name }))}
       campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}

@@ -13,13 +13,19 @@
 //        who (optional) → notes
 import { useMemo, useState, useTransition } from "react";
 import { logActivity } from "@/app/actions";
-import { ACTIVITY_TYPES, EVENT_TYPES, outcomesFor } from "@/lib/taxonomy";
+import {
+  ACTIVITY_TYPES, ACCOUNT_STATUSES, EVENT_TYPES, INTEREST_LEVELS,
+  LEAD_APPT_STATUSES, RELATIONSHIP_STRENGTHS, outcomesFor,
+} from "@/lib/taxonomy";
 import { addDays, fmtDate, nowISO, todayISO } from "@/lib/dates";
 import { Icon } from "./icons";
 
+// Businesses and leads carry their current standing so the wizard can show
+// what it is today before offering to change it.
 type Slim = { id: number; name: string };
+type SlimAccount = Slim & { status: string; relationship: string };
 type SlimContact = { id: number; name: string; accountId: number | null; title: string | null };
-type SlimLead = { id: number; name: string; phone: string | null };
+type SlimLead = { id: number; name: string; phone: string | null; apptStatus: string; interest: string };
 type SlimOpp = { id: number; name: string; accountId: number | null };
 type SlimPartner = { id: number; accountId: number };
 
@@ -30,7 +36,7 @@ type Prefill = Partial<{
 
 type Phase =
   | "type" | "business" | "contact" | "outcome" | "event"
-  | "results" | "leads" | "dropbox" | "followup" | "newcontacts" | "details";
+  | "results" | "leads" | "dropbox" | "standing" | "followup" | "newcontacts" | "details";
 
 type Flow = "touch" | "results" | "dropbox" | "note";
 function flowFor(type: string | null): Flow {
@@ -77,7 +83,7 @@ function Screen({ title, sub, children }: { title: string; sub?: string; childre
 type CapturedPerson = { name: string; phone: string; booked: boolean; apptDate: string; locationId: string; revenue: string; collected: boolean };
 
 export default function ActivityWizard({ accounts, contacts, leads, opportunities, events, campaigns, partners, locations, projects, prefill }: {
-  accounts: Slim[];
+  accounts: SlimAccount[];
   contacts: SlimContact[];
   leads: SlimLead[];
   opportunities: SlimOpp[];
@@ -129,6 +135,10 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   const [ecTitle, setEcTitle] = useState("");
   const [ecPhone, setEcPhone] = useState("");
   const [ecEmail, setEcEmail] = useState("");
+  // Standing update — where the relationship and the pipeline status stand
+  // after this touch. null means "leave as-is".
+  const [newRelationship, setNewRelationship] = useState<string | null>(null);
+  const [newStatus, setNewStatus] = useState<string | null>(null);
   const [followUp, setFollowUp] = useState<string | null>(null);
   const [createTask, setCreateTask] = useState(true);
   const [customDate, setCustomDate] = useState(false);
@@ -164,15 +174,18 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   // ---- funnel routing ----
   // Where to go once the "who / where" (business/contact) is resolved.
   // Takes the type explicitly so it can be called in the same click that sets it.
+  /** Route through the standing step when there's a record it could update. */
+  const orStanding = (fallback: Phase): Phase => (hasStanding ? "standing" : fallback);
+
   const afterWho = (t: string | null = type): Phase => {
     const f = flowFor(t);
     if (f === "results") return "results";
     if (f === "dropbox") return "dropbox";
-    if (f === "note") return "details";
+    if (f === "note") return orStanding("details");
     if (t === "Voicemail") {
       // A voicemail IS the outcome — record it and skip the question.
       setOutcome("Left Voicemail");
-      return "followup";
+      return orStanding("followup");
     }
     return "outcome";
   };
@@ -218,13 +231,21 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
     setShowMore(false);
   };
 
+  // The standing step needs something to update — an existing business or an
+  // existing lead. A brand-new record created inline is already current, and a
+  // touch with neither has nothing to restate.
+  const standingTarget: "account" | "lead" | null =
+    accountId ? "account" : leadId ? "lead" : null;
+  const hasStanding = standingTarget !== null;
+
   // Progress bar order, tailored to the active flow.
   const bookedEvent = outcome === "Booked Event";
+  const withStanding = (...p: Phase[]): Phase[] => (hasStanding ? p : p.filter((x) => x !== "standing"));
   const PHASE_ORDER: Phase[] =
-    flow === "results" ? ["type", "business", "results", "leads", "newcontacts", "details"]
-    : flow === "dropbox" ? ["type", "business", "dropbox", "newcontacts", "details"]
-    : flow === "note" ? ["type", "business", "details"]
-    : ["type", "business", "contact", "outcome", ...(bookedEvent ? ["event" as Phase] : []), "followup", "newcontacts", "details"];
+    flow === "results" ? withStanding("type", "business", "results", "leads", "standing", "newcontacts", "details")
+    : flow === "dropbox" ? withStanding("type", "business", "dropbox", "standing", "newcontacts", "details")
+    : flow === "note" ? withStanding("type", "business", "standing", "details")
+    : withStanding("type", "business", "contact", "outcome", ...(bookedEvent ? ["event" as Phase] : []), "standing", "followup", "newcontacts", "details");
   const stepIndex = Math.max(0, PHASE_ORDER.indexOf(phase));
 
   const addCapturedPerson = () => {
@@ -302,6 +323,11 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
 
     // Extra contacts learned about on a communication / drop-in touch
     if (extraContacts.length) fd.set("extraContacts", JSON.stringify(extraContacts));
+
+    // Standing update — only sent when actually changed, so an untouched
+    // screen never rewrites a record.
+    if (newRelationship) fd.set("newRelationship", newRelationship);
+    if (newStatus) fd.set("newStatus", newStatus);
 
     if (followUp) {
       fd.set("nextFollowUpAt", followUp);
@@ -584,13 +610,13 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
                   if (type) setEvType(EVENT_TYPE_FROM_ACTIVITY[type] ?? "Lunch and Learn");
                   go("event");
                 } else {
-                  go("followup");
+                  go(orStanding("followup"));
                 }
               }}>
               {o}
             </button>
           ))}
-          <button className={skipBtn} onClick={() => { setOutcome(null); go("followup"); }}>
+          <button className={skipBtn} onClick={() => { setOutcome(null); go(orStanding("followup")); }}>
             Skip
           </button>
         </Screen>
@@ -626,7 +652,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
             <input value={evName} onChange={(e) => setEvName(e.target.value)}
               placeholder={`${evType}${accountName ? ` — ${accountName}` : ""}`} className={inputBox} />
           </label>
-          <button className={continueBtn} onClick={() => go("followup")}>Continue</button>
+          <button className={continueBtn} onClick={() => go(orStanding("followup"))}>Continue</button>
         </Screen>
       )}
 
@@ -724,7 +750,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
               ＋ Add this person
             </button>
           </div>
-          <button className={continueBtn} onClick={() => go(accountId || newAccountName ? "newcontacts" : "details")}>
+          <button className={continueBtn} onClick={() => go(orStanding(accountId || newAccountName ? "newcontacts" : "details"))}>
             {capturedPeople.length ? `Done — ${capturedPeople.length} person${capturedPeople.length === 1 ? "" : "s"}${bookedCount ? `, ${bookedCount} booked` : ""}` : "No one to add — continue"}
           </button>
         </Screen>
@@ -738,9 +764,70 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
               onChange={(e) => setCards(e.target.value)} placeholder="e.g. 12" className={inputBox} />
             <span className="mt-1 block text-xs text-faint">Rolls into this partner&apos;s running card total and resets the pickup clock.</span>
           </label>
-          <button className={continueBtn} onClick={() => go("newcontacts")}>Continue</button>
+          <button className={continueBtn} onClick={() => go(orStanding("newcontacts"))}>Continue</button>
         </Screen>
       )}
+
+      {phase === "standing" && standingTarget && (() => {
+        const isLead = standingTarget === "lead";
+        const who = isLead ? contactName : accountName;
+        // Current values, so the screen shows where things stand before changing it.
+        const cur = isLead
+          ? { rel: leads.find((l) => l.id === leadId)?.interest ?? "Unknown",
+              status: leads.find((l) => l.id === leadId)?.apptStatus ?? "Not Contacted" }
+          : { rel: accounts.find((a) => a.id === accountId)?.relationship ?? "Cold",
+              status: accounts.find((a) => a.id === accountId)?.status ?? "New Prospect" };
+        const relOptions: readonly string[] = isLead ? INTEREST_LEVELS : RELATIONSHIP_STRENGTHS;
+        const statusOptions: readonly string[] = isLead ? LEAD_APPT_STATUSES : ACCOUNT_STATUSES;
+        const relLabel = isLead ? "Interest level" : "Relationship";
+        const chip = (active: boolean) =>
+          `rounded-full border px-3.5 py-1.5 text-[0.8rem] font-medium transition-colors ${
+            active ? "border-accent bg-accent-soft text-accent-deep" : "border-line bg-card text-soft hover:bg-hairline"}`;
+
+        return (
+          <Screen title="Where do things stand now?" sub={who ?? undefined}>
+            <div className="space-y-4 rounded-xl bg-card p-4 shadow-card">
+              <div>
+                <span className={fieldLabel}>{relLabel}</span>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {relOptions.map((r) => {
+                    const active = (newRelationship ?? cur.rel) === r;
+                    return (
+                      <button key={r} className={chip(active)}
+                        onClick={() => setNewRelationship(r === cur.rel ? null : r)}>
+                        {r}{r === cur.rel && " ·  now"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <span className={fieldLabel}>Status</span>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {statusOptions.map((st) => {
+                    const active = (newStatus ?? cur.status) === st;
+                    return (
+                      <button key={st} className={chip(active)}
+                        onClick={() => setNewStatus(st === cur.status ? null : st)}>
+                        {st}{st === cur.status && " ·  now"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <button className={continueBtn}
+              onClick={() => go(flow === "touch" ? "followup" : accountId || newAccountName ? "newcontacts" : "details")}>
+              {newRelationship || newStatus ? "Update & continue" : "Continue"}
+            </button>
+            <button className={skipBtn}
+              onClick={() => { setNewRelationship(null); setNewStatus(null);
+                go(flow === "touch" ? "followup" : accountId || newAccountName ? "newcontacts" : "details"); }}>
+              No change
+            </button>
+          </Screen>
+        );
+      })()}
 
       {phase === "followup" && (
         <Screen title="Schedule the follow-up?" sub="A task lands on your list on that day">
