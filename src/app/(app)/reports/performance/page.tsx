@@ -60,10 +60,20 @@ export default async function PerformanceReport({ searchParams }: { searchParams
   const link = scope.params;
   const inScope = scopeConds(s.opportunities, scope);
 
+  // Month to date — cumulative progress alongside the week. Anchored on the
+  // month the period STARTS in: the week of Jul 27 runs into August, and
+  // reporting "Aug 1–2" for it would read as a month that had barely begun.
+  // Capped at today so a week running into the future doesn't imply data we
+  // cannot have yet. Redundant on a monthly report, so hidden there.
+  const mtdFrom = `${cur.from.slice(0, 7)}-01`;
+  const mtdTo = cur.to > todayISO() ? todayISO() : cur.to;
+  const showMtd = period === "week";
+
   const staleCutoff = addDays(todayISO(), -14);
-  const [m, mPrev, openOpps, staleOpps, goals] = await Promise.all([
+  const [m, mPrev, mMtd, openOpps, staleOpps, goals] = await Promise.all([
     metricValues(cur.from, cur.to, scope, link),
     metricValues(prev.from, prev.to, scope, link),
+    showMtd ? metricValues(mtdFrom, mtdTo, scope, link) : Promise.resolve(null),
     db.select({ c: count() }).from(s.opportunities).where(and(inArray(s.opportunities.stage, [...OPEN_STAGES]), ...inScope)),
     db.select({ c: count() }).from(s.opportunities)
       .where(and(inArray(s.opportunities.stage, [...OPEN_STAGES]), lt(s.opportunities.stageChangedAt, staleCutoff), ...inScope)),
@@ -179,6 +189,33 @@ export default async function PerformanceReport({ searchParams }: { searchParams
           <p className="mt-1.5"><span className="text-xs text-faint">of {money(charged)} charged</span></p>
         </Card>
       </div>
+
+      {/* Month to date — the running totals leadership asks for alongside the
+          week. Same metric definitions, just a wider window. */}
+      {mMtd && (
+        <Card className="print-keep mb-5">
+          <CardHeader title={`Month to Date · ${fmtMonth(mtdFrom)}`} action={
+            <span className="text-xs text-faint">{fmtDateLong(mtdFrom)} – {fmtDateLong(mtdTo)}</span>
+          } />
+          <div className="grid grid-cols-3 gap-3 px-5 pb-5">
+            {[
+              { label: "Events Booked", metric: mMtd.events_booked, money: false },
+              { label: "New Patient Appointments", metric: mMtd.appointments_booked, money: false },
+              { label: "Money Collected", metric: mMtd.money_collected, money: true },
+            ].map((c) => (
+              <div key={c.label}>
+                <p className="text-[0.72rem] font-medium uppercase tracking-wider text-faint">{c.label}</p>
+                <p className={`mt-1.5 text-2xl font-semibold leading-none ${c.money ? "text-accent-deep" : ""}`}>
+                  <DrillNumber value={c.money ? money(c.metric.value) : c.metric.value} href={c.metric.href} />
+                </p>
+                <p className="mt-1.5 text-xs text-faint">
+                  {c.money ? money(m.money_collected.value) : m[c.metric.key].value} this {unit}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid gap-5 md:grid-cols-2">
         {metricTable(`Activity · what ${scope.mode !== "person" ? "we" : scope.userId === user.id ? "I" : scope.label} did`, activityRows)}
