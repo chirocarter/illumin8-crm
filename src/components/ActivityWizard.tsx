@@ -102,11 +102,13 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   const [leadId, setLeadId] = useState<number | null>(prefill.leadId ?? null);
   // Inline creation: people/businesses not in the system yet get created on save.
   const [newAccountName, setNewAccountName] = useState<string | null>(null);
-  const [newContact, setNewContact] = useState<{ name: string; phone: string } | null>(null);
+  const [newContact, setNewContact] = useState<{ name: string; phone: string; title: string; email: string } | null>(null);
   const [newLead, setNewLead] = useState<{ name: string; phone: string } | null>(null);
   const [addMode, setAddMode] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [outcome, setOutcome] = useState<string | null>(null);
   // Inline event capture (when outcome === "Booked Event")
   const [evType, setEvType] = useState<string>("Lunch and Learn");
@@ -182,11 +184,8 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
     if (f === "results") return "results";
     if (f === "dropbox") return "dropbox";
     if (f === "note") return orStanding("details");
-    if (t === "Voicemail") {
-      // A voicemail IS the outcome — record it and skip the question.
-      setOutcome("Left Voicemail");
-      return orStanding("followup");
-    }
+    // Voicemail is no longer a type — it's the "Left Voicemail" outcome of a
+    // phone call, so it comes through the normal outcome question.
     return "outcome";
   };
 
@@ -198,6 +197,8 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
     setContactsMode(false);
     setNewName("");
     setNewPhone("");
+    setNewTitle("");
+    setNewEmail("");
   };
 
   const go = (to: Phase) => {
@@ -280,6 +281,8 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
     if (!contactId && newContact) {
       fd.set("newContactName", newContact.name);
       if (newContact.phone) fd.set("newContactPhone", newContact.phone);
+      if (newContact.title) fd.set("newContactTitle", newContact.title);
+      if (newContact.email) fd.set("newContactEmail", newContact.email);
     }
     if (!leadId && newLead) {
       fd.set("newLeadName", newLead.name);
@@ -509,11 +512,18 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
             <div className="space-y-2.5 rounded-xl bg-card p-4 shadow-card">
               <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)}
                 placeholder="Full name" className={inputBox} />
+              <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Role at the business (owner, HR, manager…)" className={inputBox} />
               <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)}
                 placeholder="Phone (optional)" className={inputBox} />
+              <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
+                type="email" placeholder="Email (optional)" className={inputBox} />
               <button disabled={!newName.trim()} className={continueBtn}
                 onClick={() => {
-                  setNewContact({ name: newName.trim(), phone: newPhone.trim() });
+                  setNewContact({
+                    name: newName.trim(), phone: newPhone.trim(),
+                    title: newTitle.trim(), email: newEmail.trim(),
+                  });
                   setContactId(null);
                   setLeadId(null);
                   go(afterWho());

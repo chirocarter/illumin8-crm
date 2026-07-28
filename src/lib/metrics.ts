@@ -7,6 +7,7 @@ import {
   CONTACT_ACTIVITY_TYPES, IN_PERSON_ACTIVITY_TYPES, PARTNERSHIP_CONVO_OUTCOMES,
   OPEN_STAGES,
 } from "./taxonomy";
+import { followUpCondition } from "./followups";
 import { todayISO } from "./dates";
 import { scopeConds } from "./scope";
 
@@ -65,7 +66,7 @@ export async function metricValues(
     one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.type, [...IN_PERSON_ACTIVITY_TYPES])))),
     one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.type, ["Phone Call", "Voicemail"])))),
     act(eq(a.type, "Email")),
-    act(eq(a.type, "Follow-Up")),
+    act(followUpCondition()),
     one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.outcome, [...PARTNERSHIP_CONVO_OUTCOMES])))),
     act(eq(a.type, "Drop Box Visit")),
     one(db.select({ c: count() }).from(s.events).where(and(gte(s.events.bookedAt, from), lt(s.events.bookedAt, upper(to)), ...inScope(s.events)))),
@@ -92,7 +93,7 @@ export async function metricValues(
     m("in_person_visits", "In-Person Visits", inPersonVisits, `/activities${qs({ ...range, typeGroup: "inperson" })}`),
     m("phone_calls", "Phone Calls", phoneCalls, `/activities${qs({ ...range, typeGroup: "phone" })}`),
     m("emails", "Emails", emails, `/activities${qs({ ...range, type: "Email" })}`),
-    m("follow_ups_completed", "Follow-Ups Completed", followUps, `/activities${qs({ ...range, type: "Follow-Up" })}`),
+    m("follow_ups_completed", "Follow-Ups Completed", followUps, `/activities${qs({ ...range, followups: "1" })}`),
     m("partnership_conversations", "Partnership Conversations", partnershipConvos, `/activities${qs({ ...range, outcomeGroup: "partnership" })}`),
     m("drop_box_visits", "Drop Box Visits", dropBoxVisits, `/activities${qs({ ...range, type: "Drop Box Visit" })}`),
     m("events_booked", "Events Booked", eventsBooked, `/events${qs({ bookedFrom: from, bookedTo: to, ...linkParams })}`),

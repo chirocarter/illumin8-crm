@@ -44,16 +44,30 @@ export const OPEN_STAGES = [
   "Event Date Pending", "Event Booked",
 ] as const;
 
+// What you can pick when logging. Deliberately shorter than the list of types
+// that exist in the data:
+//   • "Voicemail" is an OUTCOME of a phone call ("Left Voicemail"), not a
+//     separate kind of activity.
+//   • "Follow-Up" is derived, not chosen — any contact with a business you have
+//     already spoken to counts as one (see followUpCondition in metrics.ts).
 export const ACTIVITY_TYPES = [
-  "Phone Call", "Voicemail", "Email", "Text", "In-Person Visit", "Drop Box Visit",
-  "Follow-Up", "Meeting", "Lunch and Learn", "Screening Event", "Networking",
+  "Phone Call", "Email", "Text", "In-Person Visit", "Drop Box Visit",
+  "Meeting", "Lunch and Learn", "Screening Event", "Networking",
   "Note", "Other",
 ] as const;
 
 // Activity types that count as "contacting a business" for activity reports.
+// Retains Voicemail and Follow-Up so activities logged before those options
+// were retired still count in historical reports.
 export const CONTACT_ACTIVITY_TYPES = [
   "Phone Call", "Voicemail", "Email", "Text", "In-Person Visit", "Drop Box Visit",
   "Follow-Up", "Meeting", "Lunch and Learn", "Screening Event", "Networking",
+] as const;
+
+// The direct-communication subset — these become follow-ups once a business has
+// been contacted before. Events and drop-box runs are their own metrics.
+export const COMMUNICATION_TYPES = [
+  "Phone Call", "Voicemail", "Email", "Text", "In-Person Visit", "Meeting", "Follow-Up",
 ] as const;
 
 export const IN_PERSON_ACTIVITY_TYPES = [

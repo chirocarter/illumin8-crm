@@ -10,6 +10,7 @@ import {
 } from "./taxonomy";
 import { todayISO, addDays, nowISO } from "./dates";
 import { listScope, scopeConds } from "./scope";
+import { followUpCondition } from "./followups";
 
 export type SP = Record<string, string | string[] | undefined>;
 
@@ -165,6 +166,9 @@ export async function listActivities(sp: SP) {
   const outcome = spStr(sp, "outcome");
   if (outcome) conds.push(eq(s.activities.outcome, outcome));
   if (spStr(sp, "outcomeGroup") === "partnership") conds.push(inArray(s.activities.outcome, [...PARTNERSHIP_CONVO_OUTCOMES]));
+  // Same derived rule the Follow-Ups Completed metric counts, so the number and
+  // this list can never disagree.
+  if (spStr(sp, "followups")) conds.push(followUpCondition());
   for (const key of ["accountId", "contactId", "leadId", "opportunityId", "eventId", "partnerId", "campaignId", "projectId"] as const) {
     const v = spNum(sp, key);
     if (v) conds.push(eq(s.activities[key], v));

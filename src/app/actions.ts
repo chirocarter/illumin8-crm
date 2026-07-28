@@ -171,7 +171,9 @@ export async function logActivity(fd: FormData) {
   if (!contactId && newContactName) {
     const [contact] = await db.insert(s.contacts).values({
       ...splitName(newContactName),
+      title: str(fd, "newContactTitle"),
       phone: str(fd, "newContactPhone"),
+      email: str(fd, "newContactEmail"),
       accountId,
       source: "Added while logging activity",
       ...own,
