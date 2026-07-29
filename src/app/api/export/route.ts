@@ -31,8 +31,15 @@ export async function GET(req: NextRequest) {
   const builder = BUILDERS[entity];
   if (!builder) return new Response("Unknown entity", { status: 400 });
 
+  // Repeated params (multi-select filters like ?status=A&status=B) must arrive
+  // as arrays — assigning in a loop would keep only the last value and the CSV
+  // would silently disagree with the list it was exported from.
   const sp: SP = {};
-  params.forEach((v, k) => { if (k !== "entity") sp[k] = v; });
+  for (const key of new Set(params.keys())) {
+    if (key === "entity") continue;
+    const all = params.getAll(key);
+    sp[key] = all.length > 1 ? all : all[0];
+  }
 
   const rows = await builder(sp);
   const today = new Date().toISOString().slice(0, 10);

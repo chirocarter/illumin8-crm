@@ -9,6 +9,8 @@ export type FilterDef = {
   name: string;
   label: string;
   options: (string | { value: string; label: string })[];
+  /** Render as toggleable chips so several values can be shown at once. */
+  multi?: boolean;
 };
 
 export default function FilterBar({ filters = [], dateKeys, searchable = false }: {
@@ -26,6 +28,16 @@ export default function FilterBar({ filters = [], dateKeys, searchable = false }
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value);
     else next.delete(key);
+    startTransition(() => router.push(`${pathname}?${next.toString()}`));
+  };
+
+  /** Adds/removes one value from a repeatable param, e.g. ?status=A&status=B */
+  const toggle = (key: string, value: string) => {
+    const next = new URLSearchParams(params.toString());
+    const current = params.getAll(key);
+    next.delete(key);
+    const after = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+    for (const v of after) next.append(key, v);
     startTransition(() => router.push(`${pathname}?${next.toString()}`));
   };
 
@@ -60,16 +72,42 @@ export default function FilterBar({ filters = [], dateKeys, searchable = false }
           }}
         />
       )}
-      {filters.map((f) => (
-        <select key={f.name} value={params.get(f.name) ?? ""} className={selectCls}
-          onChange={(e) => set(f.name, e.target.value)}>
-          <option value="">{f.label}: All</option>
-          {f.options.map((o) => {
-            const v = typeof o === "string" ? { value: o, label: o } : o;
-            return <option key={v.value} value={v.value}>{v.label}</option>;
-          })}
-        </select>
-      ))}
+      {filters.map((f) => {
+        if (!f.multi) {
+          return (
+            <select key={f.name} value={params.get(f.name) ?? ""} className={selectCls}
+              onChange={(e) => set(f.name, e.target.value)}>
+              <option value="">{f.label}: All</option>
+              {f.options.map((o) => {
+                const v = typeof o === "string" ? { value: o, label: o } : o;
+                return <option key={v.value} value={v.value}>{v.label}</option>;
+              })}
+            </select>
+          );
+        }
+        // Multi-select: chips you toggle, so you can show any combination.
+        const picked = params.getAll(f.name);
+        return (
+          <span key={f.name} className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[0.8rem] font-medium text-faint">{f.label}:</span>
+            <button onClick={() => set(f.name, "")}
+              className={picked.length === 0 ? `${selectCls} pill-active` : `${selectCls} pill-idle`}>
+              All
+            </button>
+            {f.options.map((o) => {
+              const v = typeof o === "string" ? { value: o, label: o } : o;
+              const on = picked.includes(v.value);
+              return (
+                <button key={v.value} onClick={() => toggle(f.name, v.value)}
+                  aria-pressed={on}
+                  className={on ? `${selectCls} pill-active` : `${selectCls} pill-idle`}>
+                  {v.label}
+                </button>
+              );
+            })}
+          </span>
+        );
+      })}
       {dateKeys && (
         <span className="flex items-center gap-1.5 text-[0.8rem] text-soft">
           <input type="date" value={params.get(dateKeys[0]) ?? ""} className={selectCls}

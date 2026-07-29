@@ -11,6 +11,7 @@ import {
 import { todayISO, addDays, nowISO } from "./dates";
 import { listScope, scopeConds } from "./scope";
 import { followUpCondition } from "./followups";
+import { outreachEventsOnly } from "./metrics";
 
 export type SP = Record<string, string | string[] | undefined>;
 
@@ -28,6 +29,18 @@ export function spStr(sp: SP, key: string): string | undefined {
   const v = sp[key];
   const str = Array.isArray(v) ? v[0] : v;
   return str && str.length > 0 ? str : undefined;
+}
+
+/**
+ * All values for a repeatable param — `?status=Interested&status=Nurture`.
+ * Multi-select filters use this so you can show several statuses at once
+ * instead of one at a time.
+ */
+export function spAll(sp: SP, key: string): string[] {
+  const v = sp[key];
+  const list = Array.isArray(v) ? v : v ? [v] : [];
+  // A single value may also arrive comma-joined from a link.
+  return list.flatMap((x) => x.split(",")).map((x) => x.trim()).filter(Boolean);
 }
 function spNum(sp: SP, key: string): number | undefined {
   const v = spStr(sp, key);
@@ -75,8 +88,9 @@ export async function listAccounts(sp: SP) {
   const conds: SQL[] = await scopeStart(sp, s.accounts);
   const q = spStr(sp, "q");
   if (q) conds.push(like(s.accounts.name, `%${q}%`));
-  const status = spStr(sp, "status");
-  if (status) conds.push(eq(s.accounts.status, status));
+  // Status is multi-select: pick every status you want shown.
+  const statuses = spAll(sp, "status");
+  if (statuses.length) conds.push(inArray(s.accounts.status, statuses));
   const vertical = spStr(sp, "vertical");
   if (vertical) conds.push(eq(s.accounts.vertical, vertical));
   const area = spStr(sp, "area");
@@ -261,6 +275,11 @@ export async function listEvents(sp: SP) {
   if (from) conds.push(gte(s.events.startsAt, from));
   const to = spStr(sp, "to");
   if (to) conds.push(lt(s.events.startsAt, up(to)));
+  // The Events Booked / Held metrics exclude internal meetings and time-off, so
+  // their drill-downs must too, or the number and the list disagree.
+  if (spStr(sp, "bookedFrom") || spStr(sp, "bookedTo") || spStr(sp, "heldFrom") || spStr(sp, "heldTo")) {
+    conds.push(outreachEventsOnly());
+  }
   const bf = spStr(sp, "bookedFrom");
   if (bf) conds.push(gte(s.events.bookedAt, bf));
   const bt = spStr(sp, "bookedTo");

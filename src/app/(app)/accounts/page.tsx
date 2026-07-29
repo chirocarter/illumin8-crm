@@ -24,7 +24,8 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
 
       <FilterBar searchable
         filters={[
-          { name: "status", label: "Status", options: [...ACCOUNT_STATUSES] },
+          // multi so you can show, say, Interested + Partner Candidate together
+          { name: "status", label: "Status", options: [...ACCOUNT_STATUSES], multi: true },
           { name: "vertical", label: "Vertical", options: [...VERTICALS] },
           { name: "area", label: "Area", options: [...AREAS] },
         ]}

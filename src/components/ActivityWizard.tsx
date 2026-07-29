@@ -60,6 +60,10 @@ const EVENT_TYPE_FROM_ACTIVITY: Record<string, string> = {
   Networking: "Community Event",
 };
 
+// Outcomes that mean something got scheduled — each one opens the date/time
+// screen so it appears on the calendar rather than living only in a note.
+const BOOKING_OUTCOMES: readonly string[] = ["Booked Meeting", "Booked Event"];
+
 const FOLLOWUP_CHIPS = [
   { label: "No follow-up", days: null },
   { label: "Tomorrow", days: 1 },
@@ -113,6 +117,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   // Inline event capture (when outcome === "Booked Event")
   const [evType, setEvType] = useState<string>("Lunch and Learn");
   const [evStartsAt, setEvStartsAt] = useState("");
+  const [evEndsAt, setEvEndsAt] = useState("");
   const [evExpected, setEvExpected] = useState("");
   const [evName, setEvName] = useState("");
   const [evLocationId, setEvLocationId] = useState("");
@@ -240,7 +245,8 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   const hasStanding = standingTarget !== null;
 
   // Progress bar order, tailored to the active flow.
-  const bookedEvent = outcome === "Booked Event";
+  const bookedEvent = outcome !== null && BOOKING_OUTCOMES.includes(outcome);
+  const isMeetingBooking = outcome === "Booked Meeting";
   const withStanding = (...p: Phase[]): Phase[] => (hasStanding ? p : p.filter((x) => x !== "standing"));
   const PHASE_ORDER: Phase[] =
     flow === "results" ? withStanding("type", "business", "results", "leads", "standing", "newcontacts", "details")
@@ -297,6 +303,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
     if (flow === "touch" && bookedEvent && !eventId) {
       fd.set("newEventType", evType);
       if (evStartsAt) fd.set("newEventStartsAt", evStartsAt.length === 16 ? evStartsAt + ":00" : evStartsAt);
+      if (evEndsAt) fd.set("newEventEndsAt", evEndsAt.length === 16 ? evEndsAt + ":00" : evEndsAt);
       if (evExpected) fd.set("newEventExpected", evExpected);
       if (evLocationId) fd.set("newEventLocationId", evLocationId);
       if (evName.trim()) fd.set("newEventName", evName.trim());
@@ -616,8 +623,11 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
             <button key={o} className={tile(outcome === o)}
               onClick={() => {
                 setOutcome(o);
-                if (o === "Booked Event" && !eventId) {
-                  if (type) setEvType(EVENT_TYPE_FROM_ACTIVITY[type] ?? "Lunch and Learn");
+                // Anything you booked needs a date so it lands on the calendar.
+                if (BOOKING_OUTCOMES.includes(o) && !eventId) {
+                  setEvType(o === "Booked Meeting"
+                    ? "Meeting"
+                    : (type && EVENT_TYPE_FROM_ACTIVITY[type]) || "Lunch and Learn");
                   go("event");
                 } else {
                   go(orStanding("followup"));
@@ -633,23 +643,34 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
       )}
 
       {phase === "event" && (
-        <Screen title="Tell me about the event" sub="You booked it — let's capture the details">
+        <Screen
+          title={isMeetingBooking ? "When is the meeting?" : "Tell me about the event"}
+          sub={isMeetingBooking ? "It'll show on your calendar" : "You booked it — let's capture the details"}>
           <label className="block">
-            <span className={fieldLabel}>Event type</span>
+            <span className={fieldLabel}>{isMeetingBooking ? "Meeting type" : "Event type"}</span>
             <select value={evType} onChange={(e) => setEvType(e.target.value)} className={inputBox}>
               {EVENT_TYPES.map((t) => <option key={t}>{t}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className={fieldLabel}>When is it?</span>
-            <input type="datetime-local" value={evStartsAt} onChange={(e) => setEvStartsAt(e.target.value)} className={inputBox} />
+            <span className={fieldLabel}>Starts</span>
+            <input type="datetime-local" autoFocus value={evStartsAt}
+              onChange={(e) => setEvStartsAt(e.target.value)} className={inputBox} />
             <span className="mt-1 block text-xs text-faint">Leave blank if the date isn&apos;t locked yet — it&apos;ll be marked Date Pending.</span>
           </label>
           <label className="block">
-            <span className={fieldLabel}>Expected attendees</span>
-            <input type="number" min="0" inputMode="numeric" value={evExpected}
-              onChange={(e) => setEvExpected(e.target.value)} placeholder="e.g. 25" className={inputBox} />
+            <span className={fieldLabel}>Ends (optional)</span>
+            <input type="datetime-local" value={evEndsAt}
+              onChange={(e) => setEvEndsAt(e.target.value)} className={inputBox} />
           </label>
+          {/* Attendee counts only make sense for outreach events, not a meeting. */}
+          {!isMeetingBooking && (
+            <label className="block">
+              <span className={fieldLabel}>Expected attendees</span>
+              <input type="number" min="0" inputMode="numeric" value={evExpected}
+                onChange={(e) => setEvExpected(e.target.value)} placeholder="e.g. 25" className={inputBox} />
+            </label>
+          )}
           <label className="block">
             <span className={fieldLabel}>Illumin8 location (optional)</span>
             <select value={evLocationId} onChange={(e) => setEvLocationId(e.target.value)} className={inputBox}>

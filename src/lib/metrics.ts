@@ -2,14 +2,23 @@
 // drill-down URL that opens the exact filtered records behind the number.
 // No AI, no estimates: if the number is on screen, the list is one click away.
 import { db, schema as s } from "@/db";
-import { and, count, countDistinct, eq, gte, inArray, isNotNull, lt, sql, sum, type SQL } from "drizzle-orm";
+import { and, count, countDistinct, eq, gte, inArray, isNotNull, lt, notInArray, sql, sum, type SQL } from "drizzle-orm";
 import {
   CONTACT_ACTIVITY_TYPES, IN_PERSON_ACTIVITY_TYPES, PARTNERSHIP_CONVO_OUTCOMES,
-  OPEN_STAGES,
+  OPEN_STAGES, NON_OUTREACH_EVENT_TYPES,
 } from "./taxonomy";
 import { followUpCondition } from "./followups";
 import { todayISO } from "./dates";
 import { scopeConds } from "./scope";
+
+/**
+ * Internal meetings and time-off are calendar entries, not outreach, so they
+ * are excluded from Events Booked / Held / Screenings. Exported so the events
+ * list applies the same exclusion and the drill-down matches the number.
+ */
+export function outreachEventsOnly(): SQL {
+  return notInArray(s.events.type, [...NON_OUTREACH_EVENT_TYPES]);
+}
 
 /** Who/where a set of numbers covers. Omitted keys mean "everyone"/"everywhere". */
 export type MetricScope = { cityId?: number | null; userId?: number | null };
@@ -69,9 +78,9 @@ export async function metricValues(
     act(followUpCondition()),
     one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.outcome, [...PARTNERSHIP_CONVO_OUTCOMES])))),
     act(eq(a.type, "Drop Box Visit")),
-    one(db.select({ c: count() }).from(s.events).where(and(gte(s.events.bookedAt, from), lt(s.events.bookedAt, upper(to)), ...inScope(s.events)))),
-    one(db.select({ c: count() }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events)))),
-    one(db.select({ c: sum(s.events.screeningsCompleted) }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events)))),
+    one(db.select({ c: count() }).from(s.events).where(and(gte(s.events.bookedAt, from), lt(s.events.bookedAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
+    one(db.select({ c: count() }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
+    one(db.select({ c: sum(s.events.screeningsCompleted) }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
     one(db.select({ c: count() }).from(s.appointments).where(and(gte(s.appointments.createdAt, from), lt(s.appointments.createdAt, upper(to)), ...inScope(s.appointments)))),
     one(db.select({ c: count() }).from(s.appointments).where(and(eq(s.appointments.status, "Showed"), gte(s.appointments.scheduledAt, from), lt(s.appointments.scheduledAt, upper(to)), ...inScope(s.appointments)))),
     one(db.select({ c: count() }).from(s.appointments).where(and(eq(s.appointments.status, "No-Show"), gte(s.appointments.scheduledAt, from), lt(s.appointments.scheduledAt, upper(to)), ...inScope(s.appointments)))),

@@ -77,7 +77,7 @@ export const IN_PERSON_ACTIVITY_TYPES = [
 
 export const ACTIVITY_OUTCOMES = [
   "No Answer", "Left Voicemail", "Awaiting Reply", "Spoke with Gatekeeper", "Reached Decision Maker",
-  "Good Conversation", "Interested", "Not Interested", "Follow-Up Needed", "Booked Meeting",
+  "Good Conversation", "Discussed Partnership", "Interested", "Not Interested", "Follow-Up Needed", "Booked Meeting",
   "Booked Event", "Needs Materials", "Closed / Converted",
 ] as const;
 
@@ -85,22 +85,22 @@ export const ACTIVITY_OUTCOMES = [
 // "No Answer", and an email doesn't reach a gatekeeper.
 const PHONE_OUTCOMES = [
   "No Answer", "Left Voicemail", "Spoke with Gatekeeper", "Reached Decision Maker",
-  "Good Conversation", "Interested", "Not Interested", "Follow-Up Needed", "Booked Meeting",
+  "Good Conversation", "Discussed Partnership", "Interested", "Not Interested", "Follow-Up Needed", "Booked Meeting",
   "Booked Event", "Needs Materials", "Closed / Converted",
 ] as const;
 const MESSAGE_OUTCOMES = [
-  "Awaiting Reply", "Good Conversation", "Interested", "Not Interested", "Follow-Up Needed",
-  "Booked Meeting", "Booked Event", "Needs Materials", "Closed / Converted",
+  "Awaiting Reply", "Good Conversation", "Discussed Partnership", "Interested", "Not Interested",
+  "Follow-Up Needed", "Booked Meeting", "Booked Event", "Needs Materials", "Closed / Converted",
 ] as const;
 const VISIT_OUTCOMES = [
-  "Spoke with Gatekeeper", "Reached Decision Maker", "Good Conversation", "Interested",
-  "Not Interested", "Follow-Up Needed", "Booked Meeting", "Booked Event",
+  "Spoke with Gatekeeper", "Reached Decision Maker", "Good Conversation", "Discussed Partnership",
+  "Interested", "Not Interested", "Follow-Up Needed", "Booked Meeting", "Booked Event",
   "Needs Materials", "Closed / Converted",
 ] as const;
 // "Good Conversation" leads for meetings — a routine partner check-in that went
 // well is the most common result and shouldn't force a prospecting label.
 const MEETING_OUTCOMES = [
-  "Good Conversation", "Interested", "Not Interested", "Follow-Up Needed", "Booked Meeting",
+  "Good Conversation", "Discussed Partnership", "Interested", "Not Interested", "Follow-Up Needed", "Booked Meeting",
   "Booked Event", "Needs Materials", "Closed / Converted",
 ] as const;
 
@@ -119,9 +119,15 @@ export function outcomesFor(type: string | null): readonly string[] {
   return (type && OUTCOMES_BY_TYPE[type]) || ACTIVITY_OUTCOMES;
 }
 
-// Outcomes that count as a "partnership conversation" (a real two-way business talk).
+// A "partnership conversation" is one where a partnership was actually
+// discussed — so it is now an EXPLICIT choice, not inferred.
+//
+// This used to include "Good Conversation", "Interested" and "Reached Decision
+// Maker", which meant any productive call counted: a pleasant email to a
+// business with no partner status was reported as a partnership conversation.
+// Only the outcomes below, which state a partnership step outright, qualify.
 export const PARTNERSHIP_CONVO_OUTCOMES = [
-  "Reached Decision Maker", "Good Conversation", "Interested", "Booked Meeting", "Booked Event", "Closed / Converted",
+  "Discussed Partnership", "Booked Event", "Closed / Converted",
 ] as const;
 
 export const PARTNER_TYPES = [
@@ -141,8 +147,25 @@ export const CAMPAIGN_STATUSES = ["Draft", "Active", "Paused", "Completed"] as c
 
 export const EVENT_TYPES = [
   "Lunch and Learn", "Gym Screening", "Community Event", "Expo / Booth",
-  "Dental CE / Ergonomics Presentation", "Office Visit", "Partner Event", "Other",
+  "Dental CE / Ergonomics Presentation", "Office Visit", "Partner Event",
+  // Calendar-only entries: internal meetings and blocked-out time. They are
+  // events so they appear on the calendar, but they are not outreach and are
+  // excluded from the Events Booked / Events Held metrics.
+  "Meeting", "Internal Meeting", "Time Off / Away", "Other",
 ] as const;
+
+/**
+ * Event types that are scheduling entries, not outreach — kept out of Events
+ * Booked / Held / Screenings.
+ *
+ * "Meeting" is included: booking a meeting from a call now creates a calendar
+ * entry, and counting those as Events Booked would inflate the 6-events/week
+ * goal, which means lunch-and-learns and screenings — not sit-down meetings.
+ */
+export const NON_OUTREACH_EVENT_TYPES = ["Meeting", "Internal Meeting", "Time Off / Away"] as const;
+
+/** Event types shown in green on the calendar (meetings rather than outreach events). */
+export const MEETING_EVENT_TYPES = ["Meeting", "Internal Meeting", "Time Off / Away"] as const;
 
 export const EVENT_STATUSES = [
   "Idea", "Planning", "Date Pending", "Booked", "Confirmed", "Completed",

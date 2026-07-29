@@ -198,6 +198,10 @@ export async function logActivity(fd: FormData) {
       partnerId: num(fd, "partnerId"),
       clinicLocationId: num(fd, "newEventLocationId"),
       startsAt,
+      endsAt: (() => {
+        const end = str(fd, "newEventEndsAt");
+        return end && startsAt && end > startsAt ? end : null;
+      })(),
       // Booked today regardless of whether a firm time is set yet.
       status: startsAt ? "Booked" : "Date Pending",
       bookedAt: nowISO(),

@@ -15,6 +15,8 @@ export default async function EventForm({ action, event, defaults }: {
     partnerId?: number; campaignId?: number;
     /** "YYYY-MM-DDTHH:mm" — prefilled when adding from a calendar day */
     startsAt?: string;
+    /** preselects the event type, e.g. "Meeting" from the calendar's + Meeting */
+    type?: string;
   };
 }) {
   const [accounts, contacts, opportunities, campaigns, partners, locations] = await Promise.all([
@@ -39,7 +41,7 @@ export default async function EventForm({ action, event, defaults }: {
             <input name="name" required defaultValue={e?.name} className={inputCls} placeholder="e.g. CrossFit ABQ Screening Day" />
           </Field>
           <Field label="Type">
-            <select name="type" defaultValue={e?.type ?? "Lunch and Learn"} className={selectCls}>
+            <select name="type" defaultValue={e?.type ?? defaults?.type ?? "Lunch and Learn"} className={selectCls}>
               {EVENT_TYPES.map((v) => <option key={v}>{v}</option>)}
             </select>
           </Field>

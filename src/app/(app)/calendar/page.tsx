@@ -5,6 +5,7 @@ import { PageHeader, Card, EmptyState, pillSm } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { cityWhere } from "@/lib/scope";
 import { fmtDate, todayISO, addDays } from "@/lib/dates";
+import { MEETING_EVENT_TYPES } from "@/lib/taxonomy";
 import type { SP } from "@/lib/lists";
 import { spStr } from "@/lib/lists";
 
@@ -20,18 +21,20 @@ type Item = {
   sort: string;
   label: string;
   href: string;
-  kind: "event" | "appointment" | "task" | "pickup";
+  kind: "event" | "meeting" | "appointment" | "task" | "pickup";
 };
 
 const KIND_STYLE: Record<Item["kind"], string> = {
   event: "bg-accent-soft text-accent-deep",
+  meeting: "bg-good-soft text-good",
   appointment: "bg-info-soft text-info",
   task: "bg-hairline text-soft",
   pickup: "bg-warn-soft text-accent-deep",
 };
 
 const KIND_LABEL: Record<Item["kind"], string> = {
-  event: "Events", appointment: "Appointments", task: "Tasks & calls", pickup: "Drop box pickups",
+  event: "Events", meeting: "Meetings & time off", appointment: "Appointments",
+  task: "Tasks & calls", pickup: "Drop box pickups",
 };
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
@@ -111,7 +114,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       .map((e): Item => ({
         day: e.startsAt!.slice(0, 10), time: fmtTime(e.startsAt!),
         endTime: e.endsAt ? fmtTime(e.endsAt) : null, sort: e.startsAt!,
-        label: e.name, href: `/events/${e.id}`, kind: "event",
+        label: e.name, href: `/events/${e.id}`,
+        // Meetings and time off are green — visually separate from outreach events.
+        kind: (MEETING_EVENT_TYPES as readonly string[]).includes(e.type) ? "meeting" : "event",
       })),
     ...appointments
       .filter((a) => a.status !== "Canceled")
@@ -137,6 +142,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const addOn = (iso: string) => `${iso}T09:00`;
   const addButtons = (iso: string, compact = false) => (
     <span className={`flex items-center gap-1.5 ${compact ? "" : "flex-wrap"}`}>
+      {/* Meeting is its own button because it's the common calendar entry —
+          internal meetings and blocked-out time, not outreach. */}
+      <Link href={`/events/new?startsAt=${addOn(iso)}&type=Meeting`} className={pillSm}>+ Meeting</Link>
       <Link href={`/events/new?startsAt=${addOn(iso)}`} className={pillSm}>+ Event</Link>
       <Link href={`/tasks/new?dueDate=${iso}`} className={pillSm}>+ Task</Link>
     </span>
