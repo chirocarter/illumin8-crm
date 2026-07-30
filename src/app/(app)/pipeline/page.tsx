@@ -1,58 +1,121 @@
 import Link from "next/link";
-import { db, schema as s } from "@/db";
-import { eq } from "drizzle-orm";
-import { PageHeader, BtnLink, pillSm } from "@/components/ui";
-import KanbanBoard from "@/components/KanbanBoard";
+import { PageHeader, BtnLink, Card, EmptyState, pillSm } from "@/components/ui";
 import { Icon } from "@/components/icons";
-import { OPEN_STAGES } from "@/lib/taxonomy";
-import { todayISO } from "@/lib/dates";
-import { cityWhere } from "@/lib/scope";
+import { todayISO, fmtDate } from "@/lib/dates";
+import { activeCity, resolveScope, selectableUsers } from "@/lib/scope";
+import { requireUser } from "@/lib/auth";
+import { pipelineCards, PIPELINE_STAGES, type PipelineStage } from "@/lib/pipeline";
+import ScopeToggle from "@/components/ScopeToggle";
+import type { SP } from "@/lib/lists";
 
 export const metadata = { title: "Pipeline" };
 export const dynamic = "force-dynamic";
 
-const BOARD_STAGES = [...OPEN_STAGES, "Nurture"];
+/** What each column means, so the board explains itself. */
+const STAGE_HINT: Record<PipelineStage, string> = {
+  Prospect: "No contact logged yet",
+  Contacted: "You've reached out",
+  Interested: "Showed interest or discussed partnering",
+  "Meeting Booked": "A meeting is on the books",
+  "Event Booked": "An event is scheduled",
+  "Event Completed": "The event happened",
+  Partner: "Active partner",
+};
 
-export default async function PipelinePage() {
-  const rows = await db
-    .select({
-      id: s.opportunities.id, name: s.opportunities.name, stage: s.opportunities.stage,
-      expectedEventDate: s.opportunities.expectedEventDate,
-      nextFollowUpAt: s.opportunities.nextFollowUpAt,
-      accountId: s.opportunities.accountId, accountName: s.accounts.name,
-    })
-    .from(s.opportunities)
-    .leftJoin(s.accounts, eq(s.opportunities.accountId, s.accounts.id))
-    .where(await cityWhere(s.opportunities.cityId));
+const STAGE_ACCENT: Record<PipelineStage, string> = {
+  Prospect: "text-faint",
+  Contacted: "text-soft",
+  Interested: "text-info",
+  "Meeting Booked": "text-good",
+  "Event Booked": "text-accent-deep",
+  "Event Completed": "text-accent-deep",
+  Partner: "text-good",
+};
 
+export default async function PipelinePage({ searchParams }: { searchParams: Promise<SP> }) {
+  const sp = await searchParams;
   const today = todayISO();
-  const cards = rows
-    .filter((r) => BOARD_STAGES.includes(r.stage))
-    .map((r) => ({ ...r, overdue: !!r.nextFollowUpAt && r.nextFollowUpAt < today }));
 
-  const closed = (stage: string) => rows.filter((r) => r.stage === stage).length;
+  const [user, scope, city, people] = await Promise.all([
+    requireUser(), resolveScope(sp), activeCity(), selectableUsers(),
+  ]);
+  const cards = await pipelineCards(scope, today);
+
+  const byStage = new Map<PipelineStage, typeof cards>();
+  for (const c of cards) byStage.set(c.stage, [...(byStage.get(c.stage) ?? []), c]);
+  // Within a column, overdue follow-ups first, then most recently touched.
+  for (const [, list] of byStage) {
+    list.sort((a, b) =>
+      Number(b.overdue) - Number(a.overdue) ||
+      (b.lastContactedAt ?? "").localeCompare(a.lastContactedAt ?? ""));
+  }
 
   return (
     <div>
-      <PageHeader title="Pipeline" subtitle="Drag cards between stages — headers open the filtered list"
+      <PageHeader title="Pipeline"
+        subtitle={<span>{scope.label} · every business, staged by what&apos;s actually been logged</span>}
         actions={<>
-          <BtnLink variant="outline" href="/opportunities">List view</BtnLink>
-          <BtnLink href="/opportunities/new"><Icon name="plus" className="h-4 w-4" /> New Opportunity</BtnLink>
+          <BtnLink variant="outline" href="/accounts">List view</BtnLink>
+          <BtnLink href="/activities/new"><Icon name="plus" className="h-4 w-4" /> Log Activity</BtnLink>
         </>} />
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {(["Completed", "Converted", "Lost / Not Fit"] as const).map((stg) => (
-          <Link key={stg} href={`/opportunities?stage=${encodeURIComponent(stg)}`} className={pillSm}>
-            {stg} · {closed(stg)}
-          </Link>
-        ))}
-        <Link href="/opportunities?stale=1"
-          className={pillSm + " !text-accent-deep hover:!bg-accent-soft"}>
-          Stale (14+ days in stage)
-        </Link>
-      </div>
+      <ScopeToggle basePath="/pipeline" sp={sp} mode={scope.mode} cityName={city?.name ?? "My city"}
+        isAdmin={user.role === "admin"} people={people} meId={user.id} />
 
-      <KanbanBoard stages={BOARD_STAGES} cards={cards} />
+      <p className="mb-4 text-xs text-faint">
+        Stages update themselves — log a call and the business moves. Businesses marked
+        Not a Fit or Do Not Contact are left off the board.
+      </p>
+
+      {cards.length === 0 ? (
+        <Card>
+          <EmptyState icon="pipeline" title={`No businesses in ${scope.label}`}
+            hint="Add a business, or switch scope above to see another city's pipeline." />
+        </Card>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {PIPELINE_STAGES.map((stage) => {
+            const list = byStage.get(stage) ?? [];
+            return (
+              <div key={stage} className="flex w-[250px] shrink-0 flex-col rounded-card bg-well p-2">
+                <div className="mb-2 px-2 pt-1">
+                  <span className="flex items-baseline justify-between">
+                    <span className={`text-[0.72rem] font-semibold uppercase tracking-wider ${STAGE_ACCENT[stage]}`}>
+                      {stage}
+                    </span>
+                    <span className="text-[0.72rem] font-medium text-faint">{list.length}</span>
+                  </span>
+                  <span className="mt-0.5 block text-[0.68rem] text-faint">{STAGE_HINT[stage]}</span>
+                </div>
+
+                <div className="flex min-h-[60px] flex-col gap-2">
+                  {list.slice(0, 40).map((c) => (
+                    <Link key={c.accountId} href={`/accounts/${c.accountId}`}
+                      className="block rounded-xl bg-card p-3 shadow-card transition-all hover:shadow-lift">
+                      <p className="text-[0.83rem] font-medium leading-snug hover:text-accent-deep">{c.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-soft" title={c.reason}>{c.reason}</p>
+                      {c.nextFollowUpAt && (
+                        <p className={`mt-1.5 text-[0.7rem] ${c.overdue ? "font-medium text-bad" : "text-faint"}`}>
+                          ↻ {fmtDate(c.nextFollowUpAt)}
+                        </p>
+                      )}
+                    </Link>
+                  ))}
+                  {list.length > 40 && (
+                    <Link href={`/accounts?status=${encodeURIComponent(stage)}`}
+                      className="px-2 py-1 text-[0.7rem] text-faint hover:underline">
+                      +{list.length - 40} more
+                    </Link>
+                  )}
+                  {list.length === 0 && (
+                    <p className="px-2 py-3 text-center text-[0.7rem] text-faint">—</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
