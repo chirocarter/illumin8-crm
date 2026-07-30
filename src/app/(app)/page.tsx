@@ -10,6 +10,7 @@ import { ensureFollowUpTasks } from "@/lib/housekeeping";
 import { thisWeekRange, lastWeekRange, fmtDate, fmtDateTime, fmtMoney, todayISO, daysBetween } from "@/lib/dates";
 import { CONTACT_ACTIVITY_TYPES, IN_PERSON_ACTIVITY_TYPES, PARTNERSHIP_CONVO_OUTCOMES } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/auth";
+import { completeFocusItem } from "@/app/actions";
 import { activeCity, resolveScope, scopeConds, selectableUsers } from "@/lib/scope";
 import type { SP } from "@/lib/lists";
 
@@ -151,9 +152,11 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
           ) : (
             <ul className="px-2 pb-2">
               {focus.map((f, i) => (
-                <li key={i}>
+                // The Done button sits beside the link, not inside it — a button
+                // nested in an anchor is invalid and swallows the click.
+                <li key={i} className="flex items-center gap-1 rounded-xl transition-colors hover:bg-hairline">
                   <Link href={f.href}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-hairline">
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5">
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
                       f.score >= 55 ? "bg-bad-soft text-bad" : f.score >= 45 ? "bg-warn-soft text-accent-deep" : "bg-info-soft text-info"
                     }`}>
@@ -165,6 +168,16 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
                     </span>
                     <Icon name="arrowRight" className="h-4 w-4 shrink-0 text-faint" />
                   </Link>
+                  {f.done && (
+                    <form action={completeFocusItem} className="shrink-0 pr-2">
+                      <input type="hidden" name="target" value={f.done.target} />
+                      <input type="hidden" name="id" value={f.done.id} />
+                      <button type="submit" title="Mark done"
+                        className="rounded-full border border-line bg-card px-2.5 py-1 text-[0.7rem] font-medium text-soft transition-colors hover:border-good hover:bg-good-soft hover:text-good">
+                        Done
+                      </button>
+                    </form>
+                  )}
                 </li>
               ))}
             </ul>

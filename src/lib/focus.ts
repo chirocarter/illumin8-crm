@@ -16,6 +16,15 @@ export type FocusItem = {
   reason: string;
   href: string;
   kind: "task" | "opportunity" | "event" | "pickup";
+  /**
+   * What "Done" clears, when the item is something you can finish.
+   *
+   * Absent for the two kinds where it would destroy information rather than
+   * record it: an upcoming-event reminder isn't a to-do (it drops off after the
+   * date), and a drop box pickup has to capture how many cards you collected,
+   * so it sends you to the partner page instead.
+   */
+  done?: { target: "task" | "opportunityFollowUp" | "eventFollowUp"; id: number };
 };
 
 const STAGE_WEIGHT: Record<string, number> = {
@@ -56,6 +65,7 @@ export async function todaysFocus(limit = 8, scope: { cityId?: number | null; us
       // Opens the task itself (tasks have only an edit page), not the filtered list.
       href: `/tasks/${t.id}/edit`,
       kind: "task",
+      done: { target: "task", id: t.id },
     });
   }
 
@@ -85,6 +95,7 @@ export async function todaysFocus(limit = 8, scope: { cityId?: number | null; us
       reason: `${o.stage} · ${o.nextStep ?? "follow-up due"}${overdueDays > 0 ? ` · ${overdueDays}d overdue` : ""}`,
       href: `/opportunities/${o.id}`,
       kind: "opportunity",
+      done: { target: "opportunityFollowUp", id: o.id },
     });
   }
 
@@ -119,6 +130,7 @@ export async function todaysFocus(limit = 8, scope: { cityId?: number | null; us
       reason: `Post-event follow-up due ${fmtDate(e.followUpDueAt)}`,
       href: `/events/${e.id}`,
       kind: "event",
+      done: { target: "eventFollowUp", id: e.id },
     });
   }
 

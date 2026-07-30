@@ -1150,6 +1150,39 @@ export async function setUserRole(fd: FormData) {
   done("/settings?saved=1");
 }
 
+// =============== Today's Focus ===============
+/**
+ * Marks a Today's Focus item done by clearing whatever put it on the list —
+ * so the item disappears because the underlying record changed, not because
+ * anything was hidden.
+ *
+ * Only the three completable targets are accepted. Upcoming-event reminders
+ * and drop box pickups deliberately have no Done: the first is a heads-up that
+ * expires on its own, the second must record how many cards were collected.
+ */
+export async function completeFocusItem(fd: FormData) {
+  const target = str(fd, "target");
+  const id = num(fd, "id")!;
+
+  if (target === "task") {
+    await assertOwned(s.tasks, id);
+    await db.update(s.tasks)
+      .set({ status: "Completed", completedAt: nowISO() })
+      .where(eq(s.tasks.id, id));
+  } else if (target === "opportunityFollowUp") {
+    await assertOwned(s.opportunities, id);
+    // The follow-up happened; the opportunity itself stays open.
+    await db.update(s.opportunities).set({ nextFollowUpAt: null }).where(eq(s.opportunities.id, id));
+  } else if (target === "eventFollowUp") {
+    await assertOwned(s.events, id);
+    await db.update(s.events)
+      .set({ followUpRequired: false, followUpDueAt: null })
+      .where(eq(s.events.id, id));
+  }
+
+  done(str(fd, "returnTo") ?? "/");
+}
+
 // =============== Deleting records ===============
 //
 // Deleting never silently destroys history. Rows that merely *point* at the
