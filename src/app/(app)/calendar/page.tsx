@@ -126,7 +126,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       })),
     ...tasks.map((t): Item => ({
       day: t.dueDate!.slice(0, 10), time: null, endTime: null, sort: t.dueDate! + "T00",
-      label: t.title, href: `/tasks/${t.id}/edit`, kind: "task",
+      label: t.title, href: `/tasks/${t.id}?from=calendar`, kind: "task",
     })),
     ...pickups.map((p): Item => ({
       day: p.due!.slice(0, 10), time: null, endTime: null, sort: p.due! + "T01",

@@ -7,8 +7,8 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { db, schema as s } from "@/db";
-import { count, eq } from "drizzle-orm";
-import { nowISO, todayISO, addDays } from "@/lib/dates";
+import { and, count, eq, isNotNull, isNull, or } from "drizzle-orm";
+import { nowISO, todayISO, addDays, fmtDate } from "@/lib/dates";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
 import {
   ACCOUNT_STATUSES, INTEREST_LEVELS, LEAD_APPT_STATUSES,
@@ -336,6 +336,22 @@ export async function logActivity(fd: FormData) {
     }
   }
 
+  // "Not Interested" is a verdict, so it closes the business out automatically.
+  // Applied BEFORE the standing step below, so if you also picked a status on
+  // that screen your explicit choice wins over this default.
+  const outcomeValue = str(fd, "outcome");
+  if (outcomeValue === "Not Interested") {
+    if (accountId) {
+      await db.update(s.accounts)
+        .set({ status: "Not a Fit", relationshipStrength: "Cold" })
+        .where(eq(s.accounts.id, accountId));
+    } else if (leadId) {
+      await db.update(s.leads)
+        .set({ apptStatus: "Not Interested", interestLevel: "Cool" })
+        .where(eq(s.leads.id, leadId));
+    }
+  }
+
   // Standing update captured on the "where do things stand" step. Sent only
   // when actually changed, so an untouched screen never rewrites a record.
   // Applies to the business when there is one, otherwise to the lead.
@@ -380,6 +396,36 @@ export async function logActivity(fd: FormData) {
         nextPickupDueAt: addDays(todayISO(), 7),
         dropBoxStatus: "Placed",
       }).where(eq(s.partners.id, partner.id));
+    }
+  }
+
+  // Talking to someone closes the follow-up that was waiting on that
+  // conversation: call Monday, set a Friday follow-up, they ring back
+  // Wednesday — Friday's task is done, nobody should have to tick it off.
+  //
+  // Deliberately limited to tasks the system generated from an activity
+  // (activityId is set). A hand-written to-do like "Send RGCU one-pager to
+  // Patricia" is a separate errand and survives a phone call.
+  //
+  // Runs BEFORE the new follow-up below, so this activity's own task is never
+  // caught by it.
+  if (contactId || accountId) {
+    const match = contactId && accountId
+      ? or(eq(s.tasks.contactId, contactId), and(isNull(s.tasks.contactId), eq(s.tasks.accountId, accountId)))
+      : contactId
+      ? eq(s.tasks.contactId, contactId)
+      : eq(s.tasks.accountId, accountId!);
+
+    const stale = await db.select({ id: s.tasks.id, notes: s.tasks.notes })
+      .from(s.tasks)
+      .where(and(eq(s.tasks.status, "Open"), isNotNull(s.tasks.activityId), match));
+
+    for (const t of stale) {
+      await db.update(s.tasks).set({
+        status: "Completed",
+        completedAt: nowISO(),
+        notes: `${t.notes ? t.notes + " · " : ""}Auto-completed — ${type.toLowerCase()} logged ${fmtDate(occurredAt)}.`,
+      }).where(eq(s.tasks.id, t.id));
     }
   }
 

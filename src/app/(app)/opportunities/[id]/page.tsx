@@ -135,7 +135,7 @@ export default async function OpportunityDetail({ params, searchParams }: {
               <ul className="px-2 pb-2">
                 {tasks.map((t) => (
                   <li key={t.id}>
-                    <Link href={`/tasks/${t.id}/edit`} className="block rounded-xl px-3 py-2 transition-colors hover:bg-hairline">
+                    <Link href={`/tasks/${t.id}`} className="block rounded-xl px-3 py-2 transition-colors hover:bg-hairline">
                       <span className="block text-sm font-medium">{t.title}</span>
                       <span className="block text-xs text-soft">Due {fmtDate(t.dueDate)}</span>
                     </Link>

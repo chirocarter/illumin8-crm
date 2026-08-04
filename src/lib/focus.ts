@@ -63,7 +63,7 @@ export async function todaysFocus(limit = 8, scope: { cityId?: number | null; us
       title: t.title,
       reason: overdueDays > 0 ? `Overdue by ${overdueDays} day${overdueDays === 1 ? "" : "s"}` : "Due today",
       // Opens the task itself (tasks have only an edit page), not the filtered list.
-      href: `/tasks/${t.id}/edit`,
+      href: `/tasks/${t.id}?from=home`,
       kind: "task",
       done: { target: "task", id: t.id },
     });
