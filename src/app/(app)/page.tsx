@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { db, schema as s } from "@/db";
 import { and, asc, gte, inArray, lt } from "drizzle-orm";
-import { Card, CardHeader, LinkableMetric, Badge, EmptyState, RecordLink } from "@/components/ui";
+import { Card, CardHeader, LinkableMetric, EmptyState, RecordLink } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import ScopeToggle from "@/components/ScopeToggle";
-import { metricValues, pulseCounts, qs } from "@/lib/metrics";
+import EventStatusPicker from "@/components/EventStatusPicker";
+import { metricValues, pulseCounts, spendFor, qs } from "@/lib/metrics";
 import { todaysFocus } from "@/lib/focus";
 import { ensureFollowUpTasks } from "@/lib/housekeeping";
 import { thisWeekRange, lastWeekRange, fmtDate, fmtDateTime, fmtMoney, todayISO, daysBetween } from "@/lib/dates";
@@ -33,7 +34,11 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const link = scope.params;
   const inScope = (t: Parameters<typeof scopeConds>[0]) => scopeConds(t, scope);
 
-  const [metrics, prevMetrics, pulse, focus, weekEvents, goals, weekActivities, weekAccounts] = await Promise.all([
+  // Spend is personal: on the default city view you see YOUR hours and YOUR
+  // spend, not the team's. Switching the toggle to a person or org follows it.
+  const spendScope = scope.mode === "city" ? { ...scope, userId: user.id } : scope;
+
+  const [metrics, prevMetrics, pulse, focus, weekEvents, goals, weekActivities, weekAccounts, mySpend] = await Promise.all([
     metricValues(week.from, week.to, scope, link),
     metricValues(prevWeek.from, prevWeek.to, scope, link),
     pulseCounts(scope, link),
@@ -57,6 +62,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       where: and(gte(s.accounts.createdAt, week.from), lt(s.accounts.createdAt, week.to + "T99"), ...inScope(s.accounts)),
       columns: { createdAt: true },
     }),
+    spendFor(week.from, week.to, spendScope),
   ]);
 
   // Per-day (Mon–Sun) mini-trends for the activity cards — same definitions
@@ -94,9 +100,11 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
   const doer =
     scope.mode !== "person" ? "we" : scope.userId === user.id ? "I" : scope.label;
 
+  // Four each, so the rows stay even. Drop-box visits and partnership
+  // conversations still appear in full on the performance report.
   const activityCards = [
     m("businesses_contacted"), m("in_person_visits"), m("follow_ups_completed"),
-    m("partnership_conversations"), m("drop_box_visits"), m("businesses_added"),
+    m("businesses_added"),
   ];
   const outcomeCards = [
     m("new_leads"), m("meetings_booked"), m("events_booked"), m("events_held"),
@@ -194,20 +202,29 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
               hint="Book one from the pipeline — aim for 6 per week." />
           ) : (
             <ul className="px-2 pb-2">
-              {weekEvents.map((e) => (
-                <li key={e.id}>
-                  <Link href={`/events/${e.id}`} className="block rounded-xl px-3 py-2.5 transition-colors hover:bg-hairline">
-                    <span className="flex items-center justify-between gap-2">
-                      {/* min-w-0 lets the nowrap/truncate text shrink instead of widening the card */}
-                      <span className="min-w-0 truncate text-sm font-medium">{e.name}</span>
-                      <span className="shrink-0"><Badge>{e.status}</Badge></span>
-                    </span>
-                    <span className={`mt-0.5 block text-xs ${e.startsAt && e.startsAt.slice(0, 10) === today ? "font-medium text-accent-deep" : "text-soft"}`}>
-                      {fmtDateTime(e.startsAt)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+              {weekEvents.map((e) => {
+                const isDone = e.status === "Completed";
+                return (
+                  // The badge is its own control, so it sits beside the link
+                  // rather than inside it.
+                  <li key={e.id} className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors hover:bg-hairline">
+                    <Link href={`/events/${e.id}`} className="block min-w-0 flex-1">
+                      {/* min-w-0 lets the truncate shrink instead of widening the card */}
+                      <span className={`block truncate text-sm font-medium ${
+                        isDone ? "text-soft line-through decoration-good decoration-2" : ""}`}>
+                        {e.name}
+                      </span>
+                      <span className={`mt-0.5 block text-xs ${
+                        isDone ? "text-faint"
+                        : e.startsAt && e.startsAt.slice(0, 10) === today ? "font-medium text-accent-deep"
+                        : "text-soft"}`}>
+                        {fmtDateTime(e.startsAt)}
+                      </span>
+                    </Link>
+                    <EventStatusPicker eventId={e.id} status={e.status} returnTo="/" />
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
@@ -217,7 +234,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       <h2 className="order-6 mb-3 mt-8 text-[0.8rem] font-semibold uppercase tracking-wider text-faint md:order-none">
         Activity · what {doer} did this week
       </h2>
-      <div className="stagger order-7 grid grid-cols-2 gap-3 md:order-none md:grid-cols-3 lg:grid-cols-6">
+      <div className="stagger order-7 grid grid-cols-2 gap-3 md:order-none lg:grid-cols-4">
         {activityCards.map((mm) => (
           <LinkableMetric key={mm.key} label={mm.label} value={mm.value} href={mm.href}
             spark={sparks[mm.key]} delta={deltaOf(mm.key)} />
@@ -228,18 +245,19 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
       <h2 className="order-8 mb-3 mt-7 text-[0.8rem] font-semibold uppercase tracking-wider text-faint md:order-none">
         Outcomes · what it produced this week
       </h2>
-      <div className="stagger order-9 grid grid-cols-2 gap-3 md:order-none md:grid-cols-3 lg:grid-cols-6">
+      <div className="stagger order-9 grid grid-cols-2 gap-3 md:order-none md:grid-cols-4">
         {outcomeCards.map((mm) => (
           <LinkableMetric key={mm.key} label={mm.label} value={mm.value} href={mm.href} delta={deltaOf(mm.key)} />
         ))}
         <LinkableMetric label="Money Collected" value={fmtMoney(m("money_collected").value)} href={m("money_collected").href} accent
           delta={deltaOf("money_collected")} deltaText={fmtMoney(Math.abs(deltaOf("money_collected")))}
           sub={`of ${fmtMoney(m("money_charged").value)} charged`} />
-        {/* What the outreach cost: hours at each person's rate, plus money spent.
-            No delta arrow — the card colours up green and down red, which would
-            imply spending more is good. The breakdown below carries the meaning. */}
-        <LinkableMetric label="Marketing Spend" value={fmtMoney(m("marketing_spend").value)} href={m("marketing_spend").href}
-          sub={`${m("hours_worked").value.toFixed(1)} h + ${fmtMoney(m("direct_spend").value)} spend`} />
+        {/* Your own hours and spend (see spendScope). No delta arrow — the card
+            colours up green and down red, which would read as "spending more is
+            good". The breakdown below carries the meaning. */}
+        <LinkableMetric label={scope.mode === "city" ? "My Marketing Spend" : "Marketing Spend"}
+          value={fmtMoney(mySpend.total)} href={`/spend${qs({ from: week.from, to: week.to })}`}
+          sub={`${mySpend.hours.toFixed(1)} h + ${fmtMoney(mySpend.direct)} spend`} />
       </div>
 
       {/* Goal progress */}

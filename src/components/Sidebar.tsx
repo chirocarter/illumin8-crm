@@ -19,7 +19,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/leads", label: "Leads", icon: "sparkle" },
   { href: "/appointments", label: "Appointments", icon: "clock" },
   { href: "/documents", label: "Documents", icon: "folder" },
-  { href: "/spend", label: "Spend", icon: "chart" },
+  { href: "/spend", label: "Spend", icon: "dollar" },
   { href: "/reports", label: "Reports", icon: "chart" },
 ];
 

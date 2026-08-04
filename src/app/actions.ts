@@ -12,7 +12,7 @@ import { nowISO, todayISO, addDays, fmtDate } from "@/lib/dates";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
 import {
   ACCOUNT_STATUSES, INTEREST_LEVELS, LEAD_APPT_STATUSES,
-  RELATIONSHIP_STRENGTHS, normalizePublicForm,
+  RELATIONSHIP_STRENGTHS, EVENT_STATUSES, EVENT_BOOKED_STATUSES, normalizePublicForm,
 } from "@/lib/taxonomy";
 import { activeCityId, canAccessCity, CITY_COOKIE } from "@/lib/scope";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
@@ -403,9 +403,14 @@ export async function logActivity(fd: FormData) {
   // conversation: call Monday, set a Friday follow-up, they ring back
   // Wednesday — Friday's task is done, nobody should have to tick it off.
   //
-  // Deliberately limited to tasks the system generated from an activity
-  // (activityId is set). A hand-written to-do like "Send RGCU one-pager to
-  // Patricia" is a separate errand and survives a phone call.
+  // The same applies to the "Enter outcomes: <event>" task raised after a
+  // meeting or event has passed — logging the next update about that business
+  // is the update, so the reminder should stop nagging.
+  //
+  // Deliberately limited to tasks the SYSTEM generated: raised from an activity
+  // (activityId set) or attached to an event (eventId set). A hand-written
+  // to-do like "Send RGCU one-pager to Patricia" is a separate errand and
+  // survives a phone call.
   //
   // Runs BEFORE the new follow-up below, so this activity's own task is never
   // caught by it.
@@ -418,7 +423,12 @@ export async function logActivity(fd: FormData) {
 
     const stale = await db.select({ id: s.tasks.id, notes: s.tasks.notes })
       .from(s.tasks)
-      .where(and(eq(s.tasks.status, "Open"), isNotNull(s.tasks.activityId), match));
+      .where(and(
+        eq(s.tasks.status, "Open"),
+        // System-generated: from an activity, or hanging off an event.
+        or(isNotNull(s.tasks.activityId), isNotNull(s.tasks.eventId)),
+        match,
+      ));
 
     for (const t of stale) {
       await db.update(s.tasks).set({
@@ -1194,6 +1204,46 @@ export async function setUserRole(fd: FormData) {
   const role = str(fd, "role") === "admin" ? "admin" : "user";
   await db.update(s.users).set({ role }).where(eq(s.users.id, id));
   done("/settings?saved=1");
+}
+
+/**
+ * Change an event's status from wherever it's shown (the dashboard card, a
+ * list) without opening the edit form. The change is recorded as an activity,
+ * so the history explains why a status moved and when.
+ */
+export async function changeEventStatus(fd: FormData) {
+  const id = num(fd, "id")!;
+  const status = str(fd, "status");
+  if (!status || !(EVENT_STATUSES as readonly string[]).includes(status)) {
+    done(str(fd, "returnTo") ?? "/");
+  }
+  await assertOwned(s.events, id);
+
+  const event = await db.query.events.findFirst({ where: eq(s.events.id, id) });
+  if (!event) done(str(fd, "returnTo") ?? "/");
+  if (event!.status === status) done(str(fd, "returnTo") ?? "/"); // nothing changed
+
+  // Stamp the booking date the first time it becomes a real booking, and never
+  // overwrite an existing one — Events Booked counts by this date.
+  const becomesBooked = (EVENT_BOOKED_STATUSES as readonly string[]).includes(status!);
+  const bookedAt = event!.bookedAt ?? (becomesBooked ? nowISO() : null);
+
+  await db.update(s.events).set({ status: status!, bookedAt }).where(eq(s.events.id, id));
+
+  await db.insert(s.activities).values({
+    type: "Note",
+    outcome: null,
+    accountId: event!.accountId,
+    contactId: event!.contactId,
+    eventId: id,
+    campaignId: event!.campaignId,
+    partnerId: event!.partnerId,
+    occurredAt: nowISO(),
+    notes: `${event!.name}: status changed from ${event!.status} to ${status}.`,
+    ...(await stamp()),
+  });
+
+  done(str(fd, "returnTo") ?? "/");
 }
 
 // =============== Marketing spend ===============

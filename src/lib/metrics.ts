@@ -138,6 +138,25 @@ export async function metricValues(
   ]);
 }
 
+/**
+ * Marketing spend on its own, so the dashboard can show YOUR hours and YOUR
+ * spend rather than the whole city's. Cheaper than a full metricValues() pass
+ * when only these four numbers are needed.
+ */
+export async function spendFor(from: string, to: string, scope: MetricScope = {}) {
+  const inScope = (t: Parameters<typeof scopeConds>[0]) => scopeConds(t, scope);
+  const [hours, labour, direct] = await Promise.all([
+    one(db.select({ c: sum(s.timeEntries.hours) }).from(s.timeEntries)
+      .where(and(gte(s.timeEntries.workedOn, from), lt(s.timeEntries.workedOn, upper(to)), ...inScope(s.timeEntries)))),
+    one(db.select({ c: sql<number>`coalesce(sum(${s.timeEntries.hours} * coalesce(${s.users.hourlyRate}, 0)), 0)` })
+      .from(s.timeEntries).leftJoin(s.users, eq(s.timeEntries.userId, s.users.id))
+      .where(and(gte(s.timeEntries.workedOn, from), lt(s.timeEntries.workedOn, upper(to)), ...inScope(s.timeEntries)))),
+    one(db.select({ c: sum(s.expenses.amount) }).from(s.expenses)
+      .where(and(gte(s.expenses.spentOn, from), lt(s.expenses.spentOn, upper(to)), ...inScope(s.expenses)))),
+  ]);
+  return { hours, labour, direct, total: labour + direct };
+}
+
 /** Counts that aren't week-bound: used on the dashboard header cards. */
 export async function pulseCounts(scope: MetricScope = {}, linkParams: Record<string, string | undefined> = {}) {
   const today = todayISO();
