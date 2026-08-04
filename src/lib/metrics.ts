@@ -5,7 +5,7 @@ import { db, schema as s } from "@/db";
 import { and, count, countDistinct, eq, gte, inArray, isNotNull, lt, notInArray, sql, sum, type SQL } from "drizzle-orm";
 import {
   CONTACT_ACTIVITY_TYPES, IN_PERSON_ACTIVITY_TYPES, PARTNERSHIP_CONVO_OUTCOMES,
-  OPEN_STAGES, NON_OUTREACH_EVENT_TYPES,
+  OPEN_STAGES, NON_OUTREACH_EVENT_TYPES, MEETING_EVENT_TYPES,
 } from "./taxonomy";
 import { followUpCondition } from "./followups";
 import { todayISO } from "./dates";
@@ -66,7 +66,8 @@ export async function metricValues(
   const [
     businessesAdded, newLeads, businessesContacted, allActivities, inPersonVisits,
     phoneCalls, emails, followUps, partnershipConvos, dropBoxVisits,
-    eventsBooked, eventsHeld, screenings, apptsBooked, apptsShowed, noShows, charged, collected,
+    eventsBooked, meetingsBooked, eventsHeld, screenings, apptsBooked, apptsShowed, noShows, charged, collected,
+    hoursWorked, labourCost, directSpend,
   ] = await Promise.all([
     one(db.select({ c: count() }).from(s.accounts).where(and(gte(s.accounts.createdAt, from), lt(s.accounts.createdAt, upper(to)), ...inScope(s.accounts)))),
     one(db.select({ c: count() }).from(s.leads).where(and(gte(s.leads.createdAt, from), lt(s.leads.createdAt, upper(to)), ...inScope(s.leads)))),
@@ -79,6 +80,8 @@ export async function metricValues(
     one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.outcome, [...PARTNERSHIP_CONVO_OUTCOMES])))),
     act(eq(a.type, "Drop Box Visit")),
     one(db.select({ c: count() }).from(s.events).where(and(gte(s.events.bookedAt, from), lt(s.events.bookedAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
+    // Meetings are counted separately so outreach event numbers stay honest.
+    one(db.select({ c: count() }).from(s.events).where(and(gte(s.events.bookedAt, from), lt(s.events.bookedAt, upper(to)), ...inScope(s.events), inArray(s.events.type, [...MEETING_EVENT_TYPES])))),
     one(db.select({ c: count() }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
     one(db.select({ c: sum(s.events.screeningsCompleted) }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
     one(db.select({ c: count() }).from(s.appointments).where(and(gte(s.appointments.createdAt, from), lt(s.appointments.createdAt, upper(to)), ...inScope(s.appointments)))),
@@ -87,7 +90,21 @@ export async function metricValues(
     // Money charged & collected on appointments booked in the range (aligned with Appointments Booked)
     one(db.select({ c: sum(s.appointments.revenue) }).from(s.appointments).where(and(gte(s.appointments.createdAt, from), lt(s.appointments.createdAt, upper(to)), ...inScope(s.appointments)))),
     one(db.select({ c: sum(s.appointments.revenue) }).from(s.appointments).where(and(eq(s.appointments.collected, true), gte(s.appointments.createdAt, from), lt(s.appointments.createdAt, upper(to)), ...inScope(s.appointments)))),
+
+    // ---- Marketing spend ----
+    one(db.select({ c: sum(s.timeEntries.hours) }).from(s.timeEntries)
+      .where(and(gte(s.timeEntries.workedOn, from), lt(s.timeEntries.workedOn, upper(to)), ...inScope(s.timeEntries)))),
+    // Priced per person: each entry uses the rate of whoever logged it, so a
+    // team with different rates totals correctly.
+    one(db.select({ c: sql<number>`coalesce(sum(${s.timeEntries.hours} * coalesce(${s.users.hourlyRate}, 0)), 0)` })
+      .from(s.timeEntries).leftJoin(s.users, eq(s.timeEntries.userId, s.users.id))
+      .where(and(gte(s.timeEntries.workedOn, from), lt(s.timeEntries.workedOn, upper(to)), ...inScope(s.timeEntries)))),
+    one(db.select({ c: sum(s.expenses.amount) }).from(s.expenses)
+      .where(and(gte(s.expenses.spentOn, from), lt(s.expenses.spentOn, upper(to)), ...inScope(s.expenses)))),
   ]);
+
+  // Spend is labour plus money out the door.
+  const marketingSpend = labourCost + directSpend;
 
   // Carried into every drill-down so the list opens the same scope the number counted.
   const range = { from, to, ...linkParams };
@@ -106,6 +123,7 @@ export async function metricValues(
     m("partnership_conversations", "Partnership Conversations", partnershipConvos, `/activities${qs({ ...range, outcomeGroup: "partnership" })}`),
     m("drop_box_visits", "Drop Box Visits", dropBoxVisits, `/activities${qs({ ...range, type: "Drop Box Visit" })}`),
     m("events_booked", "Events Booked", eventsBooked, `/events${qs({ bookedFrom: from, bookedTo: to, ...linkParams })}`),
+    m("meetings_booked", "Meetings Booked", meetingsBooked, `/events${qs({ bookedFrom: from, bookedTo: to, meetings: "1", ...linkParams })}`),
     m("events_held", "Events Held", eventsHeld, `/events${qs({ heldFrom: from, heldTo: to, ...linkParams })}`),
     m("screenings_completed", "Screenings Completed", screenings, `/events${qs({ heldFrom: from, heldTo: to, ...linkParams })}`),
     m("appointments_booked", "Appointments Booked", apptsBooked, `/appointments${qs({ cfrom: from, cto: to, ...linkParams })}`),
@@ -113,6 +131,10 @@ export async function metricValues(
     m("no_shows", "No-Shows", noShows, `/appointments${qs({ ...range, status: "No-Show" })}`),
     m("money_charged", "Money Charged", charged, `/appointments${qs({ cfrom: from, cto: to, ...linkParams })}`),
     m("money_collected", "Money Collected", collected, `/appointments${qs({ cfrom: from, cto: to, collected: "1", ...linkParams })}`),
+    m("hours_worked", "Hours Worked", hoursWorked, `/spend${qs({ ...range })}`),
+    m("labour_cost", "Cost of Hours", labourCost, `/spend${qs({ ...range })}`),
+    m("direct_spend", "Direct Spend", directSpend, `/spend${qs({ ...range })}`),
+    m("marketing_spend", "Marketing Spend", marketingSpend, `/spend${qs({ ...range })}`),
   ]);
 }
 

@@ -217,3 +217,9 @@ export function normalizePublicForm(value: string | null | undefined): PublicFor
 export const PARTNERSHIP_INTERESTS = [
   "Restaurant drop box", "Lunch & learn", "Cross-referrals", "Community event / screening", "Not sure yet",
 ] as const;
+
+/** What marketing money gets spent on. */
+export const EXPENSE_CATEGORIES = [
+  "Catering / Food", "Printing / Flyers", "Giveaways / Swag", "Event Fee",
+  "Mileage / Travel", "Supplies", "Advertising", "Other",
+] as const;

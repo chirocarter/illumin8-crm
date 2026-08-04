@@ -11,6 +11,9 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("admin"), // admin | user
   cityId: integer("city_id"), // the market this person works; members are locked to it
+  // What an hour of this person's time costs. Logged hours are multiplied by it
+  // to give the labour half of marketing spend.
+  hourlyRate: real("hourly_rate").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
 });
 
@@ -322,5 +325,39 @@ export const documents = sqliteTable("documents", {
   projectId: integer("project_id").references(() => projects.id),
   campaignId: integer("campaign_id").references(() => campaigns.id),
   accountId: integer("account_id").references(() => accounts.id),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
+});
+
+// ---- Marketing spend ----
+// Spend has two halves and they are stored separately because they are
+// recorded differently: time is logged in hours and priced from the person's
+// rate, money is logged as an amount. Both roll up into one Marketing Spend
+// figure on the dashboard and the performance report.
+
+/** Hours worked. Cost is hours x the user's hourly rate at report time. */
+export const timeEntries = sqliteTable("time_entries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workedOn: text("worked_on").notNull(),        // YYYY-MM-DD
+  hours: real("hours").notNull().default(0),
+  notes: text("notes"),
+  cityId: integer("city_id").references(() => cities.id),
+  userId: integer("user_id").references(() => users.id),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
+});
+
+/** Money spent — flyers, catering, giveaways. Optionally tied to who it was for. */
+export const expenses = sqliteTable("expenses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  spentOn: text("spent_on").notNull(),          // YYYY-MM-DD
+  amount: real("amount").notNull().default(0),
+  notes: text("notes"),                          // what it was for
+  category: text("category").notNull().default("Other"),
+  accountId: integer("account_id").references(() => accounts.id),
+  contactId: integer("contact_id").references(() => contacts.id),
+  leadId: integer("lead_id").references(() => leads.id),
+  campaignId: integer("campaign_id").references(() => campaigns.id),
+  eventId: integer("event_id").references(() => events.id),
+  cityId: integer("city_id").references(() => cities.id),
+  userId: integer("user_id").references(() => users.id),
   createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
 });

@@ -89,11 +89,13 @@ export default async function PerformanceReport({ searchParams }: { searchParams
   const activityRows = [
     "businesses_added", "businesses_contacted", "in_person_visits", "phone_calls",
     "emails", "follow_ups_completed", "partnership_conversations", "drop_box_visits",
-    "events_booked", "events_held",
+    "meetings_booked", "events_booked", "events_held",
   ];
   const outcomeRows = [
     "new_leads", "screenings_completed", "appointments_booked", "appointments_showed", "no_shows",
   ];
+  const spendRows = ["hours_worked", "labour_cost", "direct_spend", "marketing_spend"];
+  const isMoneyRow = (k: string) => k !== "hours_worked";
 
   const showed = m.appointments_showed.value;
   const decided = showed + m.no_shows.value;
@@ -220,6 +222,33 @@ export default async function PerformanceReport({ searchParams }: { searchParams
       <div className="grid gap-5 md:grid-cols-2">
         {metricTable(`Activity · what ${scope.mode !== "person" ? "we" : scope.userId === user.id ? "I" : scope.label} did`, activityRows)}
         {metricTable("Outcomes · what it produced", outcomeRows)}
+
+        {/* What the outreach cost — hours priced per person, plus money spent. */}
+        <Card className="print-keep">
+          <CardHeader title="Marketing Spend" action={
+            <span className="hidden text-xs text-faint sm:inline">Hours × each person&apos;s rate, plus spend</span>} />
+          <table className="tbl">
+            <thead><tr>
+              <th>Metric</th><th className="text-right">This {unit}</th><th className="text-right">vs {prevLabel}</th>
+            </tr></thead>
+            <tbody>
+              {spendRows.map((k) => (
+                <tr key={k}>
+                  <td className="text-soft">{m[k].label}</td>
+                  <td className="text-right">
+                    <DrillNumber
+                      value={isMoneyRow(k) ? money(m[k].value) : m[k].value.toFixed(1)}
+                      href={m[k].href} />
+                  </td>
+                  <td className="text-right text-xs text-faint">
+                    {isMoneyRow(k) ? money(Math.abs(delta(k))) : Math.abs(delta(k)).toFixed(1)}
+                    {delta(k) >= 0 ? " more" : " less"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
 
         <Card className="print-keep">
           <CardHeader title="Conversion Rates" />

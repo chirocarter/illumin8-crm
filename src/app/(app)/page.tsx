@@ -99,8 +99,8 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     m("partnership_conversations"), m("drop_box_visits"), m("businesses_added"),
   ];
   const outcomeCards = [
-    m("new_leads"), m("events_booked"), m("events_held"), m("screenings_completed"),
-    m("appointments_booked"),
+    m("new_leads"), m("meetings_booked"), m("events_booked"), m("events_held"),
+    m("screenings_completed"), m("appointments_booked"),
   ];
 
   return (
@@ -235,6 +235,11 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         <LinkableMetric label="Money Collected" value={fmtMoney(m("money_collected").value)} href={m("money_collected").href} accent
           delta={deltaOf("money_collected")} deltaText={fmtMoney(Math.abs(deltaOf("money_collected")))}
           sub={`of ${fmtMoney(m("money_charged").value)} charged`} />
+        {/* What the outreach cost: hours at each person's rate, plus money spent.
+            No delta arrow — the card colours up green and down red, which would
+            imply spending more is good. The breakdown below carries the meaning. */}
+        <LinkableMetric label="Marketing Spend" value={fmtMoney(m("marketing_spend").value)} href={m("marketing_spend").href}
+          sub={`${m("hours_worked").value.toFixed(1)} h + ${fmtMoney(m("direct_spend").value)} spend`} />
       </div>
 
       {/* Goal progress */}

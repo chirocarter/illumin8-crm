@@ -1196,6 +1196,61 @@ export async function setUserRole(fd: FormData) {
   done("/settings?saved=1");
 }
 
+// =============== Marketing spend ===============
+export async function logHours(fd: FormData) {
+  const hours = num(fd, "hours") ?? 0;
+  if (hours <= 0) done("/spend?error=hours");
+  await db.insert(s.timeEntries).values({
+    workedOn: str(fd, "workedOn") ?? todayISO(),
+    hours,
+    notes: str(fd, "notes"),
+    ...(await stamp()),
+  });
+  done("/spend?saved=hours");
+}
+
+export async function logExpense(fd: FormData) {
+  const amount = num(fd, "amount") ?? 0;
+  if (amount <= 0) done("/spend?error=amount");
+  await db.insert(s.expenses).values({
+    spentOn: str(fd, "spentOn") ?? todayISO(),
+    amount,
+    notes: str(fd, "notes"),
+    category: str(fd, "category") ?? "Other",
+    accountId: num(fd, "accountId"),
+    contactId: num(fd, "contactId"),
+    leadId: num(fd, "leadId"),
+    campaignId: num(fd, "campaignId"),
+    eventId: num(fd, "eventId"),
+    ...(await stamp()),
+  });
+  done("/spend?saved=expense");
+}
+
+export async function deleteTimeEntry(fd: FormData) {
+  const id = num(fd, "id")!;
+  await assertOwned(s.timeEntries, id);
+  await db.delete(s.timeEntries).where(eq(s.timeEntries.id, id));
+  done("/spend");
+}
+
+export async function deleteExpense(fd: FormData) {
+  const id = num(fd, "id")!;
+  await assertOwned(s.expenses, id);
+  await db.delete(s.expenses).where(eq(s.expenses.id, id));
+  done("/spend");
+}
+
+/** Admins set what an hour of someone's time costs; that prices their logged hours. */
+export async function setHourlyRate(fd: FormData) {
+  await requireAdmin();
+  const id = num(fd, "id")!;
+  await db.update(s.users)
+    .set({ hourlyRate: Math.max(0, num(fd, "hourlyRate") ?? 0) })
+    .where(eq(s.users.id, id));
+  done("/settings?saved=1");
+}
+
 // =============== Today's Focus ===============
 /**
  * Marks a Today's Focus item done by clearing whatever put it on the list —

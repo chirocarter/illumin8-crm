@@ -1,5 +1,5 @@
 import { PageHeader, Card, CardHeader, Field, inputCls, selectCls, Btn, BtnLink, Badge } from "@/components/ui";
-import { addCity, addLocation, addTag, addUser, deleteTag, deleteUser, saveGoals, setUserCity, setUserRole, switchCity, toggleLocation, updateProfile } from "@/app/actions";
+import { addCity, addLocation, addTag, addUser, deleteTag, deleteUser, saveGoals, setHourlyRate, setUserCity, setUserRole, switchCity, toggleLocation, updateProfile } from "@/app/actions";
 import { db } from "@/db";
 import { requireUser } from "@/lib/auth";
 import { activeCity, allCities } from "@/lib/scope";
@@ -184,6 +184,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   u.role === "admin" ? "bg-accent-soft text-accent-deep" : "bg-hairline text-soft"}`}>
                   {u.role === "admin" ? "Admin" : "Member"}
                 </span>
+                {/* Prices this person's logged hours into marketing spend. */}
+                <form action={setHourlyRate} className="flex items-center gap-1">
+                  <input type="hidden" name="id" value={u.id} />
+                  <span className="text-xs text-faint">$</span>
+                  <input name="hourlyRate" type="number" step="0.01" min="0" defaultValue={u.hourlyRate}
+                    aria-label={`Hourly rate for ${u.name}`}
+                    className="w-20 rounded-full border border-line bg-card px-2.5 py-1 text-xs font-medium text-soft outline-none focus:border-accent" />
+                  <span className="text-xs text-faint">/hr</span>
+                  <button type="submit" className="text-xs font-medium text-accent-deep hover:underline">Set</button>
+                </form>
                 {/* Which city this person works — for members it's also what they can see. */}
                 <form action={setUserCity}>
                   <input type="hidden" name="id" value={u.id} />
