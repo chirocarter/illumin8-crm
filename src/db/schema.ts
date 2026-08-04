@@ -209,6 +209,10 @@ export const activities = sqliteTable("activities", {
   occurredAt: text("occurred_at").notNull().default(sql`(datetime('now','localtime'))`),
   nextFollowUpAt: text("next_follow_up_at"),
   notes: text("notes"),
+  // Written by the app rather than by a person — e.g. an event status change.
+  // Kept in the history so the record explains itself, but excluded from every
+  // activity metric: it isn't outreach anyone did.
+  systemGenerated: integer("system_generated", { mode: "boolean" }).notNull().default(false),
   cityId: integer("city_id").references(() => cities.id),
   userId: integer("user_id").references(() => users.id),
   createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
@@ -221,6 +225,9 @@ export const tasks = sqliteTable("tasks", {
   status: text("status").notNull().default("Open"), // Open | Completed | Canceled
   accountId: integer("account_id").references(() => accounts.id),
   contactId: integer("contact_id").references(() => contacts.id),
+  // A follow-up scheduled for a lead needs somewhere to point, or it is
+  // orphaned and can never be matched back to that lead.
+  leadId: integer("lead_id").references(() => leads.id),
   opportunityId: integer("opportunity_id").references(() => opportunities.id),
   eventId: integer("event_id").references(() => events.id),
   activityId: integer("activity_id").references(() => activities.id),

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, schema as s } from "@/db";
-import { and, asc, gte, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt } from "drizzle-orm";
 import { Card, CardHeader, LinkableMetric, EmptyState, RecordLink } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import ScopeToggle from "@/components/ScopeToggle";
@@ -55,7 +55,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     }),
     db.query.reportGoals.findMany({ orderBy: (g, { asc }) => [asc(g.sortOrder)] }),
     db.query.activities.findMany({
-      where: and(gte(s.activities.occurredAt, week.from), lt(s.activities.occurredAt, week.to + "T99"), ...inScope(s.activities)),
+      where: and(gte(s.activities.occurredAt, week.from), lt(s.activities.occurredAt, week.to + "T99"), eq(s.activities.systemGenerated, false), ...inScope(s.activities)),
       columns: { type: true, outcome: true, occurredAt: true },
     }),
     db.query.accounts.findMany({

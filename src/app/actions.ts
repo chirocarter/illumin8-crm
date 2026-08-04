@@ -414,12 +414,16 @@ export async function logActivity(fd: FormData) {
   //
   // Runs BEFORE the new follow-up below, so this activity's own task is never
   // caught by it.
-  if (contactId || accountId) {
-    const match = contactId && accountId
-      ? or(eq(s.tasks.contactId, contactId), and(isNull(s.tasks.contactId), eq(s.tasks.accountId, accountId)))
-      : contactId
-      ? eq(s.tasks.contactId, contactId)
-      : eq(s.tasks.accountId, accountId!);
+  if (contactId || accountId || leadId) {
+    // Match on whichever party this activity was actually with. A lead-only
+    // touch has no account or contact, so without the lead arm its follow-up
+    // could never be found.
+    const arms = [
+      ...(contactId ? [eq(s.tasks.contactId, contactId)] : []),
+      ...(leadId ? [eq(s.tasks.leadId, leadId)] : []),
+      ...(accountId ? [and(isNull(s.tasks.contactId), isNull(s.tasks.leadId), eq(s.tasks.accountId, accountId))!] : []),
+    ];
+    const match = arms.length === 1 ? arms[0] : or(...arms)!;
 
     const stale = await db.select({ id: s.tasks.id, notes: s.tasks.notes })
       .from(s.tasks)
@@ -460,7 +464,9 @@ export async function logActivity(fd: FormData) {
     await db.insert(s.tasks).values({
       title: str(fd, "taskTitle") ?? `Follow up${who ? `: ${who}` : ""}`,
       dueDate: nextFollowUpAt,
-      accountId, contactId,
+      // leadId matters: a follow-up for a lead has no account or contact, and
+      // without it the task would be orphaned and never close itself.
+      accountId, contactId, leadId,
       opportunityId: num(fd, "opportunityId"),
       eventId,
       projectId,
@@ -1240,6 +1246,9 @@ export async function changeEventStatus(fd: FormData) {
     partnerId: event!.partnerId,
     occurredAt: nowISO(),
     notes: `${event!.name}: status changed from ${event!.status} to ${status}.`,
+    // History only — visible on the record, counted in no metric. Flipping a
+    // status isn't outreach, and logging an activity is how staff record work.
+    systemGenerated: true,
     ...(await stamp()),
   });
 
@@ -1383,6 +1392,7 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
     detach: [
       { table: s.activities, col: s.activities.leadId, field: "leadId", label: "activities" },
       { table: s.appointments, col: s.appointments.leadId, field: "leadId", label: "appointments" },
+      { table: s.tasks, col: s.tasks.leadId, field: "leadId", label: "tasks" },
     ],
     remove: [],
   },

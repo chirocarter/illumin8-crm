@@ -58,7 +58,13 @@ export async function metricValues(
   // Every query is narrowed the same way, so a metric and its drill-down list
   // are always describing the same rows.
   const inScope = (t: Parameters<typeof scopeConds>[0]) => scopeConds(t, scope);
-  const dateRange = and(gte(a.occurredAt, from), lt(a.occurredAt, upper(to)), ...inScope(a));
+  // System-written activities (an event status flip) stay in the history but
+  // count in nothing — they aren't work anyone did.
+  const dateRange = and(
+    gte(a.occurredAt, from), lt(a.occurredAt, upper(to)),
+    eq(a.systemGenerated, false),
+    ...inScope(a),
+  );
 
   const act = (extra?: SQL) =>
     one(db.select({ c: count() }).from(a).where(extra ? and(dateRange, extra) : dateRange));
