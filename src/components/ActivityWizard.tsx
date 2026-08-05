@@ -27,6 +27,12 @@ type SlimAccount = Slim & { status: string; relationship: string };
 type SlimContact = { id: number; name: string; accountId: number | null; title: string | null };
 type SlimLead = { id: number; name: string; phone: string | null; apptStatus: string; interest: string };
 type SlimOpp = { id: number; name: string; accountId: number | null };
+// Events carry enough to offer the right ones when logging results: a screening
+// that was already booked should be UPDATED, not duplicated.
+type SlimEvent = {
+  id: number; name: string; status: string;
+  accountId: number | null; startsAt: string | null; type: string;
+};
 type SlimPartner = { id: number; accountId: number };
 
 type Prefill = Partial<{
@@ -36,7 +42,8 @@ type Prefill = Partial<{
 
 type Phase =
   | "type" | "business" | "contact" | "outcome" | "event"
-  | "results" | "leads" | "dropbox" | "standing" | "followup" | "newcontacts" | "details";
+  | "results" | "leads" | "dropbox" | "standing" | "followup" | "newcontacts" | "details"
+  | "pickevent";
 
 type Flow = "touch" | "results" | "dropbox" | "note";
 function flowFor(type: string | null): Flow {
@@ -91,7 +98,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   contacts: SlimContact[];
   leads: SlimLead[];
   opportunities: SlimOpp[];
-  events: Slim[];
+  events: SlimEvent[];
   campaigns: Slim[];
   partners: SlimPartner[];
   locations: Slim[];
@@ -106,6 +113,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   const [leadId, setLeadId] = useState<number | null>(prefill.leadId ?? null);
   // Inline creation: people/businesses not in the system yet get created on save.
   const [newAccountName, setNewAccountName] = useState<string | null>(null);
+  const [newAccountPhone, setNewAccountPhone] = useState("");
   const [newContact, setNewContact] = useState<{ name: string; phone: string; title: string; email: string } | null>(null);
   const [newLead, setNewLead] = useState<{ name: string; phone: string } | null>(null);
   const [addMode, setAddMode] = useState(false);
@@ -122,6 +130,8 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   const [evName, setEvName] = useState("");
   const [evLocationId, setEvLocationId] = useState("");
   // Results flow (Screening Event / Lunch and Learn)
+  // Which already-scheduled event these results belong to. null = create one.
+  const [resultEventId, setResultEventId] = useState<number | null>(prefill.eventId ?? null);
   const [screened, setScreened] = useState("");
   const [resultCampaignId, setResultCampaignId] = useState<number | null>(prefill.campaignId ?? null);
   const [resultOpportunityId, setResultOpportunityId] = useState<number | null>(prefill.opportunityId ?? null);
@@ -186,7 +196,9 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
 
   const afterWho = (t: string | null = type): Phase => {
     const f = flowFor(t);
-    if (f === "results") return "results";
+    // Results flows ask which event these results belong to first, so an
+    // already-booked screening gets updated instead of duplicated.
+    if (f === "results") return "pickevent";
     if (f === "dropbox") return "dropbox";
     if (f === "note") return orStanding("details");
     // Voicemail is no longer a type — it's the "Left Voicemail" outcome of a
@@ -249,7 +261,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   const isMeetingBooking = outcome === "Booked Meeting";
   const withStanding = (...p: Phase[]): Phase[] => (hasStanding ? p : p.filter((x) => x !== "standing"));
   const PHASE_ORDER: Phase[] =
-    flow === "results" ? withStanding("type", "business", "results", "leads", "standing", "newcontacts", "details")
+    flow === "results" ? withStanding("type", "business", "pickevent", "results", "leads", "standing", "newcontacts", "details")
     : flow === "dropbox" ? withStanding("type", "business", "dropbox", "standing", "newcontacts", "details")
     : flow === "note" ? withStanding("type", "business", "standing", "details")
     : withStanding("type", "business", "contact", "outcome", ...(bookedEvent ? ["event" as Phase] : []), "standing", "followup", "newcontacts", "details");
@@ -283,7 +295,10 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
     if (accountId) fd.set("accountId", String(accountId));
     if (contactId) fd.set("contactId", String(contactId));
     if (leadId) fd.set("leadId", String(leadId));
-    if (!accountId && newAccountName) fd.set("newAccountName", newAccountName);
+    if (!accountId && newAccountName) {
+      fd.set("newAccountName", newAccountName);
+      if (newAccountPhone) fd.set("newAccountPhone", newAccountPhone);
+    }
     if (!contactId && newContact) {
       fd.set("newContactName", newContact.name);
       if (newContact.phone) fd.set("newContactPhone", newContact.phone);
@@ -311,6 +326,8 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
 
     // Results flow (screening / lunch & learn)
     if (flow === "results") {
+      // Which scheduled event to update. Absent means create a new one.
+      if (resultEventId) fd.set("resultEventId", String(resultEventId));
       if (screened) fd.set("resultScreened", screened);
       if (capturedPeople.length) fd.set("resultPeople", JSON.stringify(capturedPeople));
       // #4: results events can be attributed to a campaign/opportunity too
@@ -368,6 +385,16 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
 
   const context = [type, projectName, accountName, contactName, outcome].filter(Boolean).join(" · ");
   const isScreening = type === "Screening Event";
+
+  /** Scheduled events for this business that haven't been reported on yet —
+   *  the ones these results most likely belong to. */
+  const eventCandidates = accountId
+    ? events
+        .filter((e) => e.accountId === accountId)
+        .filter((e) => ["Booked", "Confirmed", "Date Pending", "Planning"].includes(e.status))
+        .sort((a, b) => (b.startsAt ?? "").localeCompare(a.startsAt ?? ""))
+        .slice(0, 8)
+    : [];
 
   const saveButton = (
     <button onClick={save} disabled={saving} className={continueBtn}>
@@ -474,10 +501,15 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
             <div className="space-y-2.5 rounded-xl bg-card p-4 shadow-card">
               <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)}
                 placeholder="Business name" className={inputBox} />
+              {/* You almost always have the number in hand when you're calling a
+                  business for the first time — capturing it here saves an edit. */}
+              <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)}
+                type="tel" placeholder="Phone (optional)" className={inputBox} />
               <p className="text-xs text-faint">Created when you save — fill in the rest later.</p>
               <button disabled={!newName.trim()} className={continueBtn}
                 onClick={() => {
                   setNewAccountName(newName.trim());
+                  setNewAccountPhone(newPhone.trim());
                   setAccountId(null);
                   setContactId(null);
                   setLeadId(null);
@@ -684,6 +716,27 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
               placeholder={`${evType}${accountName ? ` — ${accountName}` : ""}`} className={inputBox} />
           </label>
           <button className={continueBtn} onClick={() => go(orStanding("followup"))}>Continue</button>
+        </Screen>
+      )}
+
+      {phase === "pickevent" && (
+        <Screen title="Which event was this?"
+          sub={eventCandidates.length
+            ? "Pick the one you're reporting on — it'll be updated, not duplicated"
+            : "Nothing scheduled for this business — this will create the event"}>
+          {eventCandidates.map((e) => (
+            <button key={e.id} className={tile(resultEventId === e.id)}
+              onClick={() => { setResultEventId(e.id); go("results"); }}>
+              {e.name}
+              <span className="block text-xs font-normal text-soft">
+                {e.status}{e.startsAt ? ` · ${fmtDate(e.startsAt.slice(0, 10))}` : ""}
+              </span>
+            </button>
+          ))}
+          <button className={tile(false) + " border-dashed text-accent-deep"}
+            onClick={() => { setResultEventId(null); go("results"); }}>
+            ＋ {eventCandidates.length ? "None of these — it wasn't scheduled" : "Continue — it wasn't scheduled"}
+          </button>
         </Screen>
       )}
 

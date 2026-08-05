@@ -96,12 +96,15 @@ export default async function SpendPage({ searchParams }: { searchParams: Promis
         </p>
       )}
 
+      {/* min-w-0 at both levels: grid children default to min-width:auto, and the
+          selects below carry long business names, so without it their intrinsic
+          width forces the tracks wider than the phone screen. */}
       <div className="grid gap-5 md:grid-cols-2">
         {/* Hours */}
-        <Card>
+        <Card className="min-w-0">
           <CardHeader title="Hours" action={
             <span className="text-xs text-faint">{totalHours.toFixed(1)} h · {fmtMoney(labour)}</span>} />
-          <form action={logHours} className="grid gap-3 border-b border-hairline px-5 pb-4 md:grid-cols-2">
+          <form action={logHours} className="grid gap-3 border-b border-hairline px-5 pb-4 md:grid-cols-2 [&>*]:min-w-0">
             <Field label="Date"><input name="workedOn" type="date" defaultValue={todayISO()} className={inputCls} /></Field>
             <Field label="Hours"><input name="hours" type="number" step="0.25" min="0" required placeholder="e.g. 6.5" className={inputCls} /></Field>
             <Field label="What you worked on (optional)" className="md:col-span-2">
@@ -133,9 +136,9 @@ export default async function SpendPage({ searchParams }: { searchParams: Promis
         </Card>
 
         {/* Direct spend */}
-        <Card>
+        <Card className="min-w-0">
           <CardHeader title="Spend" action={<span className="text-xs text-faint">{fmtMoney(direct)}</span>} />
-          <form action={logExpense} className="grid gap-3 border-b border-hairline px-5 pb-4 md:grid-cols-2">
+          <form action={logExpense} className="grid gap-3 border-b border-hairline px-5 pb-4 md:grid-cols-2 [&>*]:min-w-0">
             <Field label="Date"><input name="spentOn" type="date" defaultValue={todayISO()} className={inputCls} /></Field>
             <Field label="Amount"><input name="amount" type="number" step="0.01" min="0" required placeholder="e.g. 85.00" className={inputCls} /></Field>
             <Field label="Category">

@@ -159,6 +159,7 @@ export async function logActivity(fd: FormData) {
   if (!accountId && newAccountName) {
     const [acct] = await db.insert(s.accounts).values({
       name: newAccountName,
+      phone: str(fd, "newAccountPhone"),
       status: "Contacted",
       source: "Added while logging activity",
       ...own,
@@ -215,26 +216,52 @@ export async function logActivity(fd: FormData) {
   // Results flow: Screening Event / Lunch and Learn create a completed Event,
   // the individual leads captured, and one appointment record per booked appt.
   if (!eventId && (type === "Screening Event" || type === "Lunch and Learn")) {
-    const acct = accountId ? await db.query.accounts.findFirst({ where: eq(s.accounts.id, accountId) }) : null;
     const isScreening = type === "Screening Event";
     const eventType = isScreening ? "Gym Screening" : "Lunch and Learn";
     const screened = num(fd, "resultScreened") ?? 0;
-    const [event] = await db.insert(s.events).values({
-      name: `${eventType}${acct ? ` — ${acct.name}` : ""}`,
-      type: eventType,
-      accountId,
-      contactId,
-      campaignId: num(fd, "campaignId"),
-      partnerId: num(fd, "partnerId"),
-      startsAt: occurredAt,
-      status: "Completed", // it already happened
-      bookedAt: nowISO(),
-      actualAttendees: screened,
-      screeningsCompleted: isScreening ? screened : 0,
-      notes: "Logged via activity.",
-      ...own,
-    }).returning();
-    eventId = event.id;
+
+    // If these results belong to an event that was already scheduled, close out
+    // THAT event. Creating a second one left the original sitting at "Booked"
+    // forever and double-counted the work.
+    const existingId = num(fd, "resultEventId");
+    const existing = existingId
+      ? await db.query.events.findFirst({ where: eq(s.events.id, existingId) })
+      : null;
+
+    if (existing) {
+      await assertOwned(s.events, existing.id);
+      await db.update(s.events).set({
+        status: "Completed",
+        actualAttendees: screened,
+        screeningsCompleted: isScreening ? screened : existing.screeningsCompleted,
+        outcomeNotes: str(fd, "notes") ?? existing.outcomeNotes,
+        // Keep the scheduled date; only fill it in if it was never set.
+        startsAt: existing.startsAt ?? occurredAt,
+      }).where(eq(s.events.id, existing.id));
+      eventId = existing.id;
+      // Everything captured below hangs off the event's business, so leads are
+      // tied to the host even when the activity itself had none selected.
+      accountId = accountId ?? existing.accountId;
+      contactId = contactId ?? existing.contactId;
+    } else {
+      const acct = accountId ? await db.query.accounts.findFirst({ where: eq(s.accounts.id, accountId) }) : null;
+      const [event] = await db.insert(s.events).values({
+        name: `${eventType}${acct ? ` — ${acct.name}` : ""}`,
+        type: eventType,
+        accountId,
+        contactId,
+        campaignId: num(fd, "campaignId"),
+        partnerId: num(fd, "partnerId"),
+        startsAt: occurredAt,
+        status: "Completed", // it already happened
+        bookedAt: nowISO(),
+        actualAttendees: screened,
+        screeningsCompleted: isScreening ? screened : 0,
+        notes: "Logged via activity.",
+        ...own,
+      }).returning();
+      eventId = event.id;
+    }
 
     const source = isScreening ? "Screening" : "Event";
     // Each captured person → a lead. If they booked, also an appointment with

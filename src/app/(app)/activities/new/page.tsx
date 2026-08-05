@@ -39,7 +39,10 @@ export default async function LogActivityPage({ searchParams }: { searchParams: 
         apptStatus: l.apptStatus, interest: l.interestLevel,
       }))}
       opportunities={opportunities.map((o) => ({ id: o.id, name: o.name, accountId: o.accountId }))}
-      events={events.map((e) => ({ id: e.id, name: e.name }))}
+      events={events.map((e) => ({
+        id: e.id, name: e.name, status: e.status,
+        accountId: e.accountId, startsAt: e.startsAt, type: e.type,
+      }))}
       campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
       partners={partners.map((p) => ({ id: p.id, accountId: p.accountId }))}
       locations={locations.map((l) => ({ id: l.id, name: l.name }))}
