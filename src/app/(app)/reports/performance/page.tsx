@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, schema as s } from "@/db";
-import { and, count, inArray, lt } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lt, sql, sum } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, DrillNumber, pillSm } from "@/components/ui";
 import PrintButton from "@/components/PrintButton";
 import ScopeToggle from "@/components/ScopeToggle";
@@ -68,6 +68,25 @@ export default async function PerformanceReport({ searchParams }: { searchParams
   const mtdFrom = `${cur.from.slice(0, 7)}-01`;
   const mtdTo = cur.to > todayISO() ? todayISO() : cur.to;
   const showMtd = period === "week";
+
+  // New patients per clinic, so you can see where the appointments landed.
+  // Counted on createdAt, matching Appointments Booked exactly.
+  const byOffice = await db
+    .select({
+      locationId: s.appointments.locationId,
+      office: s.locations.name,
+      appts: count(),
+      charged: sum(s.appointments.revenue),
+      collected: sql<number>`coalesce(sum(case when ${s.appointments.collected} then ${s.appointments.revenue} else 0 end), 0)`,
+    })
+    .from(s.appointments)
+    .leftJoin(s.locations, eq(s.appointments.locationId, s.locations.id))
+    .where(and(
+      gte(s.appointments.createdAt, cur.from),
+      lt(s.appointments.createdAt, cur.to + "T99"),
+      ...scopeConds(s.appointments, scope),
+    ))
+    .groupBy(s.appointments.locationId, s.locations.name);
 
   const staleCutoff = addDays(todayISO(), -14);
   const [m, mPrev, mMtd, openOpps, staleOpps, goals] = await Promise.all([
@@ -248,6 +267,49 @@ export default async function PerformanceReport({ searchParams }: { searchParams
               ))}
             </tbody>
           </table>
+        </Card>
+
+        {/* Which office the new patients went to */}
+        <Card className="print-keep">
+          <CardHeader title="New Patients by Office" action={
+            <span className="hidden text-xs text-faint sm:inline">Booked this {unit}</span>} />
+          {byOffice.length === 0 ? (
+            <p className="px-5 pb-5 pt-1 text-sm text-faint">No appointments booked this {unit}.</p>
+          ) : (
+            <table className="tbl">
+              <thead><tr>
+                <th>Office</th>
+                <th className="text-right">Patients</th>
+                <th className="text-right">Collected</th>
+              </tr></thead>
+              <tbody>
+                {byOffice
+                  .slice()
+                  .sort((a, b) => Number(b.appts) - Number(a.appts))
+                  .map((o) => (
+                    <tr key={o.locationId ?? "none"}>
+                      <td className="text-soft">{o.office ?? "No office set"}</td>
+                      <td className="text-right">
+                        {/* "none" rather than an omitted param — otherwise the
+                            unassigned row would open every appointment. */}
+                        <DrillNumber value={Number(o.appts)}
+                          href={`/appointments${qs({ cfrom: cur.from, cto: cur.to, locationId: o.locationId ?? "none", ...link })}`} />
+                      </td>
+                      <td className="text-right text-soft">{money(Number(o.collected ?? 0))}</td>
+                    </tr>
+                  ))}
+                <tr>
+                  <td className="font-medium">Total</td>
+                  <td className="text-right font-medium">
+                    {byOffice.reduce((n, o) => n + Number(o.appts), 0)}
+                  </td>
+                  <td className="text-right font-medium">
+                    {money(byOffice.reduce((n, o) => n + Number(o.collected ?? 0), 0))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          )}
         </Card>
 
         <Card className="print-keep">

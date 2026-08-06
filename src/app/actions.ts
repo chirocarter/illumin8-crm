@@ -15,6 +15,7 @@ import {
   RELATIONSHIP_STRENGTHS, EVENT_STATUSES, EVENT_BOOKED_STATUSES, normalizePublicForm,
 } from "@/lib/taxonomy";
 import { activeCityId, canAccessCity, CITY_COOKIE } from "@/lib/scope";
+import { formatPhone } from "@/lib/phone";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 
 /**
@@ -71,7 +72,7 @@ function accountValues(fd: FormData) {
     area: str(fd, "area") ?? "Other",
     address: str(fd, "address"),
     website: str(fd, "website"),
-    phone: str(fd, "phone"),
+    phone: formatPhone(str(fd, "phone")),
     email: str(fd, "email"),
     status: str(fd, "status") ?? "New Prospect",
     source: str(fd, "source"),
@@ -106,7 +107,7 @@ function contactValues(fd: FormData) {
     lastName: str(fd, "lastName") ?? "",
     title: str(fd, "title"),
     accountId: num(fd, "accountId"),
-    phone: str(fd, "phone"),
+    phone: formatPhone(str(fd, "phone")),
     email: str(fd, "email"),
     preferredMethod: str(fd, "preferredMethod"),
     contactType: str(fd, "contactType") ?? "Other",
@@ -159,7 +160,7 @@ export async function logActivity(fd: FormData) {
   if (!accountId && newAccountName) {
     const [acct] = await db.insert(s.accounts).values({
       name: newAccountName,
-      phone: str(fd, "newAccountPhone"),
+      phone: formatPhone(str(fd, "newAccountPhone")),
       status: "Contacted",
       source: "Added while logging activity",
       ...own,
@@ -173,7 +174,7 @@ export async function logActivity(fd: FormData) {
     const [contact] = await db.insert(s.contacts).values({
       ...splitName(newContactName),
       title: str(fd, "newContactTitle"),
-      phone: str(fd, "newContactPhone"),
+      phone: formatPhone(str(fd, "newContactPhone")),
       email: str(fd, "newContactEmail"),
       accountId,
       source: "Added while logging activity",
@@ -275,7 +276,7 @@ export async function logActivity(fd: FormData) {
       const bookedLocId = Number(p.locationId);
       const [lead] = await db.insert(s.leads).values({
         ...splitName(p.name),
-        phone: p.phone?.trim() || null,
+        phone: formatPhone(p.phone),
         source,
         apptStatus: p.booked ? "Booked" : "Not Contacted",
         campaignId: num(fd, "campaignId"),
@@ -314,7 +315,7 @@ export async function logActivity(fd: FormData) {
   if (!leadId && newLeadName) {
     const [lead] = await db.insert(s.leads).values({
       ...splitName(newLeadName),
-      phone: str(fd, "newLeadPhone"),
+      phone: formatPhone(str(fd, "newLeadPhone")),
       source: LEAD_SOURCE_BY_ACTIVITY[type] ?? "Other",
       apptStatus: "Contacted",
       campaignId: num(fd, "campaignId"),
@@ -354,7 +355,7 @@ export async function logActivity(fd: FormData) {
       await db.insert(s.contacts).values({
         ...splitName(p.name),
         title: p.title?.trim() || null,
-        phone: p.phone?.trim() || null,
+        phone: formatPhone(p.phone),
         email: p.email?.trim() || null,
         accountId,
         source: "Added while logging activity",
@@ -773,7 +774,7 @@ function leadValues(fd: FormData) {
   return {
     firstName: str(fd, "firstName") ?? "Unknown",
     lastName: str(fd, "lastName") ?? "",
-    phone: str(fd, "phone"),
+    phone: formatPhone(str(fd, "phone")),
     email: str(fd, "email"),
     source: str(fd, "source"),
     campaignId: num(fd, "campaignId"),
@@ -812,7 +813,7 @@ export async function convertLeadToContact(fd: FormData) {
   const [contact] = await db.insert(s.contacts).values({
     firstName: lead!.firstName,
     lastName: lead!.lastName,
-    phone: lead!.phone,
+    phone: formatPhone(lead!.phone),
     email: lead!.email,
     accountId: lead!.accountId,
     contactType: "Other",
@@ -857,7 +858,7 @@ export async function convertAccountToContact(fd: FormData) {
   const [contact] = await db.insert(s.contacts).values({
     // The business name IS the person's name in this mistake.
     ...splitName(acct!.name),
-    phone: acct!.phone,
+    phone: formatPhone(acct!.phone),
     email: acct!.email,
     contactType: "Other",
     source: acct!.source ?? "Reclassified from business",
@@ -890,7 +891,7 @@ export async function convertContactToAccount(fd: FormData) {
 
   const [acct] = await db.insert(s.accounts).values({
     name: `${c!.firstName} ${c!.lastName}`.trim(),
-    phone: c!.phone,
+    phone: formatPhone(c!.phone),
     email: c!.email,
     status: "New Prospect",
     source: c!.source ?? "Reclassified from contact",
@@ -921,7 +922,7 @@ export async function convertLeadToAccount(fd: FormData) {
 
   const [acct] = await db.insert(s.accounts).values({
     name: `${lead!.firstName} ${lead!.lastName}`.trim(),
-    phone: lead!.phone,
+    phone: formatPhone(lead!.phone),
     email: lead!.email,
     status: "New Prospect",
     source: lead!.source ? `Converted from lead (${lead!.source})` : "Converted from lead",
@@ -1584,7 +1585,7 @@ export async function importCSV(fd: FormData) {
     for (const r of rows.slice(1)) {
       const name = get(r, "name", "businessname", "business", "company");
       if (!name) continue;
-      const phone = get(r, "phone", "phonenumber");
+      const phone = formatPhone(get(r, "phone", "phonenumber"));
       const email = get(r, "email");
       const key = accountKey(name, phone, email);
       if (seen.has(key)) { skipped++; continue; }
@@ -1618,7 +1619,7 @@ export async function importCSV(fd: FormData) {
       const [f, ...rest] = (first ?? full!).split(" ");
       const firstName = first ?? f;
       const lastName = get(r, "lastname", "last") ?? (first ? "" : rest.join(" "));
-      const phone = get(r, "phone", "phonenumber");
+      const phone = formatPhone(get(r, "phone", "phonenumber"));
       const email = get(r, "email");
       const key = contactKey(firstName, lastName, phone, email);
       if (seen.has(key)) { skipped++; continue; }

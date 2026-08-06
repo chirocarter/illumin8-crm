@@ -2,7 +2,7 @@
 // through these builders, so a drill-down link, the page it opens, and the
 // exported file always agree.
 import { db, schema as s } from "@/db";
-import { and, asc, desc, eq, gte, inArray, isNotNull, like, lt, or, sql, type SQL, type Column } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lt, or, sql, type SQL, type Column } from "drizzle-orm";
 import {
   CONTACT_ACTIVITY_TYPES, IN_PERSON_ACTIVITY_TYPES, PARTNERSHIP_CONVO_OUTCOMES, OPEN_STAGES,
   INFLUENCE_LEVELS, RELATIONSHIP_STRENGTHS, RELATIONSHIP_STATUSES, INTEREST_LEVELS,
@@ -400,6 +400,10 @@ export async function listAppointments(sp: SP) {
   }
   const loc = spNum(sp, "locationId");
   if (loc) conds.push(eq(s.appointments.locationId, loc));
+  // "none" is a real filter, not the absence of one: the New Patients by Office
+  // report has a row for appointments with no clinic set, and its drill-down has
+  // to show exactly those rather than everything.
+  if (spStr(sp, "locationId") === "none") conds.push(isNull(s.appointments.locationId));
 
   return db
     .select({

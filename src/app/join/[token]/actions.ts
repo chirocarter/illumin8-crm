@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { and, eq, like } from "drizzle-orm";
 import { normalizePublicForm } from "@/lib/taxonomy";
+import { formatPhone } from "@/lib/phone";
 
 const clean = (fd: FormData, key: string, max: number) =>
   String(fd.get(key) ?? "").trim().slice(0, max);
@@ -30,7 +31,7 @@ export async function submitPublicLead(fd: FormData) {
 
   const firstName = clean(fd, "firstName", 80);
   const lastName = clean(fd, "lastName", 80);
-  const phone = clean(fd, "phone", 40);
+  const phone = formatPhone(clean(fd, "phone", 40));
   const email = clean(fd, "email", 120);
   if (!firstName || (!phone && !email)) redirect(`/join/${token}?error=1`);
 
