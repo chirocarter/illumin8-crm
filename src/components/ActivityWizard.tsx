@@ -15,7 +15,7 @@ import { useMemo, useState, useTransition } from "react";
 import { logActivity } from "@/app/actions";
 import {
   ACTIVITY_TYPES, ACCOUNT_STATUSES, EVENT_TYPES, INTEREST_LEVELS,
-  LEAD_APPT_STATUSES, RELATIONSHIP_STRENGTHS, outcomesFor,
+  LEAD_APPT_STATUSES, RELATIONSHIP_STRENGTHS, MEETING_EVENT_TYPES, outcomesFor,
 } from "@/lib/taxonomy";
 import { addDays, fmtDate, nowISO, todayISO } from "@/lib/dates";
 import { Icon } from "./icons";
@@ -194,6 +194,28 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   /** Route through the standing step when there's a record it could update. */
   const orStanding = (fallback: Phase): Phase => (hasStanding ? "standing" : fallback);
 
+  /**
+   * Where to go after picking the business.
+   *
+   * A meeting detours through "which meeting was this?" so it closes out the
+   * scheduled one instead of leaving it Booked forever — but only when there is
+   * something to pick, since an unscheduled meeting shouldn't cost a screen.
+   * Takes the id directly because the state setter hasn't flushed yet.
+   */
+  const afterBusiness = (acctId: number | null = accountId): Phase => {
+    if (flowFor(type) === "results") return "pickevent";
+    const hasScheduledMeeting = acctId !== null && events.some((e) =>
+      e.accountId === acctId &&
+      ["Booked", "Confirmed", "Date Pending", "Planning"].includes(e.status) &&
+      (MEETING_EVENT_TYPES as readonly string[]).includes(e.type));
+    if (type === "Meeting" && hasScheduledMeeting) return "pickevent";
+    return flow === "touch" || flow === "note" ? "contact" : afterWho();
+  };
+
+  /** After picking which scheduled thing this reports on. */
+  const afterPickEvent = (): Phase =>
+    flowFor(type) === "results" ? "results" : "contact";
+
   const afterWho = (t: string | null = type): Phase => {
     const f = flowFor(t);
     // Results flows ask which event these results belong to first, so an
@@ -325,9 +347,10 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
     }
 
     // Results flow (screening / lunch & learn)
+    // Which scheduled event or meeting this closes out (results flow and
+    // meetings both). Absent means there was nothing scheduled.
+    if (resultEventId) fd.set("resultEventId", String(resultEventId));
     if (flow === "results") {
-      // Which scheduled event to update. Absent means create a new one.
-      if (resultEventId) fd.set("resultEventId", String(resultEventId));
       if (screened) fd.set("resultScreened", screened);
       if (capturedPeople.length) fd.set("resultPeople", JSON.stringify(capturedPeople));
       // #4: results events can be attributed to a campaign/opportunity too
@@ -385,13 +408,24 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
 
   const context = [type, projectName, accountName, contactName, outcome].filter(Boolean).join(" · ");
   const isScreening = type === "Screening Event";
+  /** Logging a meeting that happened — it should close out the scheduled one. */
+  const isMeetingLog = type === "Meeting";
 
-  /** Scheduled events for this business that haven't been reported on yet —
-   *  the ones these results most likely belong to. */
+  /**
+   * Scheduled things for this business that haven't been reported on yet.
+   *
+   * A meeting can only close out a meeting, and an event only an event — they
+   * are separate kinds and mixing them is what let a meeting inflate the event
+   * numbers. Reporting on one of these UPDATES it rather than adding a second
+   * record, so one real-world meeting or event is always exactly one row.
+   */
   const eventCandidates = accountId
     ? events
         .filter((e) => e.accountId === accountId)
         .filter((e) => ["Booked", "Confirmed", "Date Pending", "Planning"].includes(e.status))
+        .filter((e) => (isMeetingLog
+          ? (MEETING_EVENT_TYPES as readonly string[]).includes(e.type)
+          : !(MEETING_EVENT_TYPES as readonly string[]).includes(e.type)))
         .sort((a, b) => (b.startsAt ?? "").localeCompare(a.startsAt ?? ""))
         .slice(0, 8)
     : [];
@@ -466,7 +500,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
                       // no contacts on file yet, since that visit is usually how
                       // the first one gets captured. The screen offers "add" and
                       // "skip", so it is never a dead end.
-                      go(flow === "touch" || flow === "note" ? "contact" : afterWho());
+                      go(afterBusiness(a.id));
                     }}>
                     {a.name}
                   </button>
@@ -720,13 +754,13 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
       )}
 
       {phase === "pickevent" && (
-        <Screen title="Which event was this?"
+        <Screen title={isMeetingLog ? "Which meeting was this?" : "Which event was this?"}
           sub={eventCandidates.length
-            ? "Pick the one you're reporting on — it'll be updated, not duplicated"
-            : "Nothing scheduled for this business — this will create the event"}>
+            ? `Pick the one you're reporting on — it'll be closed out, not duplicated`
+            : `Nothing scheduled for this business — this will create the ${isMeetingLog ? "meeting" : "event"}`}>
           {eventCandidates.map((e) => (
             <button key={e.id} className={tile(resultEventId === e.id)}
-              onClick={() => { setResultEventId(e.id); go("results"); }}>
+              onClick={() => { setResultEventId(e.id); go(afterPickEvent()); }}>
               {e.name}
               <span className="block text-xs font-normal text-soft">
                 {e.status}{e.startsAt ? ` · ${fmtDate(e.startsAt.slice(0, 10))}` : ""}
@@ -734,7 +768,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
             </button>
           ))}
           <button className={tile(false) + " border-dashed text-accent-deep"}
-            onClick={() => { setResultEventId(null); go("results"); }}>
+            onClick={() => { setResultEventId(null); go(afterPickEvent()); }}>
             ＋ {eventCandidates.length ? "None of these — it wasn't scheduled" : "Continue — it wasn't scheduled"}
           </button>
         </Screen>

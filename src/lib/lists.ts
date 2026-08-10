@@ -11,7 +11,7 @@ import {
 import { todayISO, addDays, nowISO } from "./dates";
 import { listScope, scopeConds } from "./scope";
 import { followUpCondition } from "./followups";
-import { outreachEventsOnly } from "./metrics";
+import { meetingsOnly, outreachEventsOnly } from "./metrics";
 
 export type SP = Record<string, string | string[] | undefined>;
 
@@ -104,6 +104,12 @@ export async function listAccounts(sp: SP) {
   if (spStr(sp, "followupOverdue")) {
     conds.push(and(isNotNull(s.accounts.nextFollowUpAt), lt(s.accounts.nextFollowUpAt, todayISO()))!);
   }
+  // Businesses that became partners in a window — the drill-down behind
+  // Partnerships Confirmed.
+  const pf = spStr(sp, "partnerFrom");
+  if (pf) conds.push(and(isNotNull(s.accounts.partnerSince), gte(s.accounts.partnerSince, pf))!);
+  const pt = spStr(sp, "partnerTo");
+  if (pt) conds.push(lt(s.accounts.partnerSince, up(pt)));
 
   return db
     .select({
@@ -275,9 +281,12 @@ export async function listEvents(sp: SP) {
   if (from) conds.push(gte(s.events.startsAt, from));
   const to = spStr(sp, "to");
   if (to) conds.push(lt(s.events.startsAt, up(to)));
-  // The Events Booked / Held metrics exclude internal meetings and time-off, so
-  // their drill-downs must too, or the number and the list disagree.
-  if (spStr(sp, "bookedFrom") || spStr(sp, "bookedTo") || spStr(sp, "heldFrom") || spStr(sp, "heldTo")) {
+  // Meetings and events are separate kinds and never counted together, so their
+  // drill-downs have to split the same way or a number won't match its list.
+  const meetingsView = !!spStr(sp, "meetings");
+  if (meetingsView) {
+    conds.push(meetingsOnly());
+  } else if (spStr(sp, "bookedFrom") || spStr(sp, "bookedTo") || spStr(sp, "heldFrom") || spStr(sp, "heldTo")) {
     conds.push(outreachEventsOnly());
   }
   const bf = spStr(sp, "bookedFrom");

@@ -20,6 +20,11 @@ export function outreachEventsOnly(): SQL {
   return notInArray(s.events.type, [...NON_OUTREACH_EVENT_TYPES]);
 }
 
+/** The mirror image: meetings and time off, never counted as events. */
+export function meetingsOnly(): SQL {
+  return inArray(s.events.type, [...MEETING_EVENT_TYPES]);
+}
+
 /** Who/where a set of numbers covers. Omitted keys mean "everyone"/"everywhere". */
 export type MetricScope = { cityId?: number | null; userId?: number | null };
 
@@ -72,7 +77,8 @@ export async function metricValues(
   const [
     businessesAdded, newLeads, businessesContacted, allActivities, inPersonVisits,
     phoneCalls, emails, followUps, partnershipConvos, dropBoxVisits,
-    eventsBooked, meetingsBooked, eventsHeld, screenings, apptsBooked, apptsShowed, noShows, charged, collected,
+    eventsBooked, meetingsBooked, meetingsAttended, partnershipsConfirmed,
+    eventsHeld, screenings, apptsBooked, apptsShowed, noShows, charged, collected,
     hoursWorked, labourCost, directSpend,
   ] = await Promise.all([
     one(db.select({ c: count() }).from(s.accounts).where(and(gte(s.accounts.createdAt, from), lt(s.accounts.createdAt, upper(to)), ...inScope(s.accounts)))),
@@ -87,7 +93,13 @@ export async function metricValues(
     act(eq(a.type, "Drop Box Visit")),
     one(db.select({ c: count() }).from(s.events).where(and(gte(s.events.bookedAt, from), lt(s.events.bookedAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
     // Meetings are counted separately so outreach event numbers stay honest.
-    one(db.select({ c: count() }).from(s.events).where(and(gte(s.events.bookedAt, from), lt(s.events.bookedAt, upper(to)), ...inScope(s.events), inArray(s.events.type, [...MEETING_EVENT_TYPES])))),
+    one(db.select({ c: count() }).from(s.events).where(and(gte(s.events.bookedAt, from), lt(s.events.bookedAt, upper(to)), ...inScope(s.events), meetingsOnly()))),
+    // Meetings you actually sat in — closed out, dated in range.
+    one(db.select({ c: count() }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events), meetingsOnly()))),
+    // Businesses whose status became Active Partner during the range. Uses
+    // partnerSince, stamped on the transition — the status column alone can't
+    // say when it happened.
+    one(db.select({ c: count() }).from(s.accounts).where(and(isNotNull(s.accounts.partnerSince), gte(s.accounts.partnerSince, from), lt(s.accounts.partnerSince, upper(to)), ...inScope(s.accounts)))),
     one(db.select({ c: count() }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
     one(db.select({ c: sum(s.events.screeningsCompleted) }).from(s.events).where(and(inArray(s.events.status, ["Completed", "Follow-Up Needed"]), gte(s.events.startsAt, from), lt(s.events.startsAt, upper(to)), ...inScope(s.events), outreachEventsOnly()))),
     one(db.select({ c: count() }).from(s.appointments).where(and(gte(s.appointments.createdAt, from), lt(s.appointments.createdAt, upper(to)), ...inScope(s.appointments)))),
@@ -130,6 +142,8 @@ export async function metricValues(
     m("drop_box_visits", "Drop Box Visits", dropBoxVisits, `/activities${qs({ ...range, type: "Drop Box Visit" })}`),
     m("events_booked", "Events Booked", eventsBooked, `/events${qs({ bookedFrom: from, bookedTo: to, ...linkParams })}`),
     m("meetings_booked", "Meetings Booked", meetingsBooked, `/events${qs({ bookedFrom: from, bookedTo: to, meetings: "1", ...linkParams })}`),
+    m("meetings_attended", "Meetings Attended", meetingsAttended, `/events${qs({ heldFrom: from, heldTo: to, meetings: "1", ...linkParams })}`),
+    m("partnerships_confirmed", "Partnerships Confirmed", partnershipsConfirmed, `/accounts${qs({ partnerFrom: from, partnerTo: to, ...linkParams })}`),
     m("events_held", "Events Held", eventsHeld, `/events${qs({ heldFrom: from, heldTo: to, ...linkParams })}`),
     m("screenings_completed", "Screenings Completed", screenings, `/events${qs({ heldFrom: from, heldTo: to, ...linkParams })}`),
     m("appointments_booked", "Appointments Booked", apptsBooked, `/appointments${qs({ cfrom: from, cto: to, ...linkParams })}`),

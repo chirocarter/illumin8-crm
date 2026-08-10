@@ -52,6 +52,10 @@ export const accounts = sqliteTable("accounts", {
   partnershipScore: integer("partnership_score").notNull().default(3), // 1-5
   eventScore: integer("event_score").notNull().default(3), // 1-5
   relationshipStrength: text("relationship_strength").notNull().default("Cold"), // Cold | Warm | Strong
+  // When this business became an Active Partner. Set the first time the status
+  // reaches that value, so "partnerships confirmed this week" is answerable —
+  // the status field alone only says where things stand now, not when.
+  partnerSince: text("partner_since"),
   doNotContact: integer("do_not_contact", { mode: "boolean" }).notNull().default(false),
   lastContactedAt: text("last_contacted_at"),
   nextFollowUpAt: text("next_follow_up_at"),

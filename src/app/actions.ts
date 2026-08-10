@@ -29,6 +29,26 @@ async function stamp(): Promise<{ cityId: number | null; userId: number }> {
 }
 
 /**
+ * Sets an account's status, stamping partnerSince the first time it becomes an
+ * Active Partner. Every status write goes through here so "partnerships
+ * confirmed this week" stays answerable — the status column alone only records
+ * where things stand now, never when they got there.
+ */
+async function setAccountStatus(accountId: number, status: string) {
+  const current = await db.query.accounts.findFirst({
+    where: eq(s.accounts.id, accountId),
+    columns: { status: true, partnerSince: true },
+  });
+  const becomingPartner = status === "Active Partner" && current?.status !== "Active Partner";
+  await db.update(s.accounts).set({
+    status,
+    // Only the first confirmation is recorded; re-saving a partner keeps the
+    // original date rather than moving the goalposts.
+    ...(becomingPartner && !current?.partnerSince ? { partnerSince: nowISO() } : {}),
+  }).where(eq(s.accounts.id, accountId));
+}
+
+/**
  * Authorization for writes. `requireUser()` only proves someone is signed in;
  * without this, any user could overwrite another city's record by posting a
  * different id. Call before every update/delete that takes an id from the form.
@@ -96,7 +116,11 @@ export async function updateAccount(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
   await assertOwned(s.accounts, id);
-  await db.update(s.accounts).set(accountValues(fd)).where(eq(s.accounts.id, id));
+  const values = accountValues(fd);
+  await db.update(s.accounts).set(values).where(eq(s.accounts.id, id));
+  // Routed through the helper so editing a business to "Active Partner" stamps
+  // partnerSince exactly like the activity flow does.
+  await setAccountStatus(id, values.status);
   done(`/accounts/${id}`);
 }
 
@@ -214,37 +238,49 @@ export async function logActivity(fd: FormData) {
     eventId = event.id;
   }
 
-  // Results flow: Screening Event / Lunch and Learn create a completed Event,
-  // the individual leads captured, and one appointment record per booked appt.
+  // ---- Closing out something that was already scheduled ----
+  //
+  // One real-world meeting or event is exactly ONE row. Reporting on it updates
+  // that row; it never adds a second. Without this a logged meeting left the
+  // scheduled one sitting at Booked forever and the work was counted twice.
+  //
+  // Applies to meetings and events alike — the wizard only ever offers
+  // candidates of the matching kind, so a meeting can't close out an event.
+  const reportedEventId = num(fd, "resultEventId");
+  if (reportedEventId) {
+    const scheduled = await db.query.events.findFirst({ where: eq(s.events.id, reportedEventId) });
+    if (scheduled) {
+      await assertOwned(s.events, scheduled.id);
+      const screened = num(fd, "resultScreened");
+      const attendees = num(fd, "resultAttendees") ?? screened;
+      const followUpNeeded = bool(fd, "resultFollowUp");
+      await db.update(s.events).set({
+        // Same two statuses the outcomes page uses, so both routes agree.
+        status: followUpNeeded ? "Follow-Up Needed" : "Completed",
+        ...(attendees !== null ? { actualAttendees: attendees } : {}),
+        ...(screened !== null ? { screeningsCompleted: screened } : {}),
+        ...(num(fd, "resultRevenue") !== null ? { revenue: num(fd, "resultRevenue")! } : {}),
+        followUpRequired: followUpNeeded,
+        followUpDueAt: followUpNeeded ? (nextFollowUpAt ?? str(fd, "resultFollowUpDue")) : null,
+        outcomeNotes: str(fd, "notes") ?? scheduled.outcomeNotes,
+        // Keep the date it was scheduled for; only fill in a missing one.
+        startsAt: scheduled.startsAt ?? occurredAt,
+      }).where(eq(s.events.id, scheduled.id));
+      eventId = scheduled.id;
+      // Anything captured below hangs off the scheduled thing's business, so
+      // people met are tied to the host even if none was picked on the activity.
+      accountId = accountId ?? scheduled.accountId;
+      contactId = contactId ?? scheduled.contactId;
+    }
+  }
+
+  // Results flow with nothing scheduled: the screening or lunch & learn happened
+  // without ever being booked, so record it as a completed event now.
   if (!eventId && (type === "Screening Event" || type === "Lunch and Learn")) {
     const isScreening = type === "Screening Event";
     const eventType = isScreening ? "Gym Screening" : "Lunch and Learn";
     const screened = num(fd, "resultScreened") ?? 0;
-
-    // If these results belong to an event that was already scheduled, close out
-    // THAT event. Creating a second one left the original sitting at "Booked"
-    // forever and double-counted the work.
-    const existingId = num(fd, "resultEventId");
-    const existing = existingId
-      ? await db.query.events.findFirst({ where: eq(s.events.id, existingId) })
-      : null;
-
-    if (existing) {
-      await assertOwned(s.events, existing.id);
-      await db.update(s.events).set({
-        status: "Completed",
-        actualAttendees: screened,
-        screeningsCompleted: isScreening ? screened : existing.screeningsCompleted,
-        outcomeNotes: str(fd, "notes") ?? existing.outcomeNotes,
-        // Keep the scheduled date; only fill it in if it was never set.
-        startsAt: existing.startsAt ?? occurredAt,
-      }).where(eq(s.events.id, existing.id));
-      eventId = existing.id;
-      // Everything captured below hangs off the event's business, so leads are
-      // tied to the host even when the activity itself had none selected.
-      accountId = accountId ?? existing.accountId;
-      contactId = contactId ?? existing.contactId;
-    } else {
+    {
       const acct = accountId ? await db.query.accounts.findFirst({ where: eq(s.accounts.id, accountId) }) : null;
       const [event] = await db.insert(s.events).values({
         name: `${eventType}${acct ? ` — ${acct.name}` : ""}`,
@@ -390,7 +426,7 @@ export async function logActivity(fd: FormData) {
       await db.update(s.accounts).set({ relationshipStrength: newRelationship }).where(eq(s.accounts.id, accountId));
     }
     if (newStatus && (ACCOUNT_STATUSES as readonly string[]).includes(newStatus)) {
-      await db.update(s.accounts).set({ status: newStatus }).where(eq(s.accounts.id, accountId));
+      await setAccountStatus(accountId, newStatus);
     }
   } else if (leadId) {
     if (newRelationship && (INTEREST_LEVELS as readonly string[]).includes(newRelationship)) {

@@ -108,10 +108,13 @@ export default async function PerformanceReport({ searchParams }: { searchParams
   const activityRows = [
     "businesses_added", "businesses_contacted", "in_person_visits", "phone_calls",
     "emails", "follow_ups_completed", "partnership_conversations", "drop_box_visits",
-    "meetings_booked", "events_booked", "events_held",
   ];
+  // Meetings and events are tracked side by side but never added together —
+  // a meeting is a conversation, an event is something you ran.
+  const meetingRows = ["meetings_booked", "meetings_attended"];
+  const eventRows = ["events_booked", "events_held", "screenings_completed"];
   const outcomeRows = [
-    "new_leads", "screenings_completed", "appointments_booked", "appointments_showed", "no_shows",
+    "new_leads", "partnerships_confirmed", "appointments_booked", "appointments_showed", "no_shows",
   ];
   const spendRows = ["hours_worked", "labour_cost", "direct_spend", "marketing_spend"];
   const isMoneyRow = (k: string) => k !== "hours_worked";
@@ -241,6 +244,8 @@ export default async function PerformanceReport({ searchParams }: { searchParams
       <div className="grid gap-5 md:grid-cols-2">
         {metricTable(`Activity · what ${scope.mode !== "person" ? "we" : scope.userId === user.id ? "I" : scope.label} did`, activityRows)}
         {metricTable("Outcomes · what it produced", outcomeRows)}
+        {metricTable("Meetings · sit-downs, not events", meetingRows)}
+        {metricTable("Events · screenings, lunch & learns, booths", eventRows)}
 
         {/* What the outreach cost — hours priced per person, plus money spent. */}
         <Card className="print-keep">
