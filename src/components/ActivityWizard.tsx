@@ -15,7 +15,7 @@ import { useMemo, useState, useTransition } from "react";
 import { logActivity } from "@/app/actions";
 import {
   ACTIVITY_TYPES, ACCOUNT_STATUSES, EVENT_TYPES, INTEREST_LEVELS,
-  LEAD_APPT_STATUSES, RELATIONSHIP_STRENGTHS, MEETING_EVENT_TYPES, outcomesFor,
+  LEAD_APPT_STATUSES, RELATIONSHIP_STRENGTHS, MEETING_EVENT_TYPES, APPOINTMENT_BOOKED_OUTCOME, outcomesFor,
 } from "@/lib/taxonomy";
 import { addDays, fmtDate, nowISO, todayISO } from "@/lib/dates";
 import { Icon } from "./icons";
@@ -43,7 +43,7 @@ type Prefill = Partial<{
 type Phase =
   | "type" | "business" | "contact" | "outcome" | "event"
   | "results" | "leads" | "dropbox" | "standing" | "followup" | "newcontacts" | "details"
-  | "pickevent";
+  | "pickevent" | "appointment";
 
 type Flow = "touch" | "results" | "dropbox" | "note";
 function flowFor(type: string | null): Flow {
@@ -133,6 +133,11 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   // Which already-scheduled event these results belong to. null = create one.
   const [resultEventId, setResultEventId] = useState<number | null>(prefill.eventId ?? null);
   const [screened, setScreened] = useState("");
+  // Single new-patient appointment booked during a lead conversation
+  const [apptDate, setApptDate] = useState("");
+  const [apptLocationId, setApptLocationId] = useState("");
+  const [apptRevenue, setApptRevenue] = useState("");
+  const [apptCollected, setApptCollected] = useState(false);
   const [resultCampaignId, setResultCampaignId] = useState<number | null>(prefill.campaignId ?? null);
   const [resultOpportunityId, setResultOpportunityId] = useState<number | null>(prefill.opportunityId ?? null);
   const [capturedPeople, setCapturedPeople] = useState<CapturedPerson[]>([]);
@@ -350,6 +355,16 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
     // Which scheduled event or meeting this closes out (results flow and
     // meetings both). Absent means there was nothing scheduled.
     if (resultEventId) fd.set("resultEventId", String(resultEventId));
+
+    // A patient booked during this conversation.
+    if (outcome === APPOINTMENT_BOOKED_OUTCOME) {
+      fd.set("apptBooked", "1");
+      if (apptDate) fd.set("apptDate", apptDate.length === 16 ? apptDate + ":00" : apptDate);
+      if (apptLocationId) fd.set("apptLocationId", apptLocationId);
+      if (apptRevenue) fd.set("apptRevenue", apptRevenue);
+      if (apptCollected) fd.set("apptCollected", "1");
+    }
+
     if (flow === "results") {
       if (screened) fd.set("resultScreened", screened);
       if (capturedPeople.length) fd.set("resultPeople", JSON.stringify(capturedPeople));
@@ -410,6 +425,8 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
   const isScreening = type === "Screening Event";
   /** Logging a meeting that happened — it should close out the scheduled one. */
   const isMeetingLog = type === "Meeting";
+  /** Talking to a prospective patient rather than a business contact. */
+  const isLeadTarget = leadId !== null || newLead !== null;
 
   /**
    * Scheduled things for this business that haven't been reported on yet.
@@ -685,10 +702,16 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
 
       {phase === "outcome" && (
         <Screen title="How did it go?">
-          {outcomesFor(type).map((o) => (
+          {outcomesFor(type, isLeadTarget).map((o) => (
             <button key={o} className={tile(outcome === o)}
               onClick={() => {
                 setOutcome(o);
+                // A booked patient needs its date, clinic and money captured, or
+                // the appointment can't be attributed to what produced it.
+                if (o === APPOINTMENT_BOOKED_OUTCOME) {
+                  go("appointment");
+                  return;
+                }
                 // Anything you booked needs a date so it lands on the calendar.
                 if (BOOKING_OUTCOMES.includes(o) && !eventId) {
                   setEvType(o === "Booked Meeting"
@@ -749,6 +772,56 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
             <input value={evName} onChange={(e) => setEvName(e.target.value)}
               placeholder={`${evType}${accountName ? ` — ${accountName}` : ""}`} className={inputBox} />
           </label>
+          <button className={continueBtn} onClick={() => go(orStanding("followup"))}>Continue</button>
+        </Screen>
+      )}
+
+      {phase === "appointment" && (
+        <Screen title="New patient appointment"
+          sub={`${contactName ?? "This person"} booked — capture it so the patient is attributed`}>
+          <label className="block">
+            <span className={fieldLabel}>When is the appointment?</span>
+            <input type="datetime-local" autoFocus value={apptDate}
+              onChange={(e) => setApptDate(e.target.value)} className={inputBox} />
+          </label>
+          <label className="block">
+            <span className={fieldLabel}>Which office?</span>
+            <select value={apptLocationId} onChange={(e) => setApptLocationId(e.target.value)} className={inputBox}>
+              <option value="">—</option>
+              {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className={fieldLabel}>Money charged</span>
+            <input type="number" min="0" step="0.01" inputMode="decimal" value={apptRevenue}
+              onChange={(e) => setApptRevenue(e.target.value)} placeholder="e.g. 75" className={inputBox} />
+          </label>
+          <button onClick={() => setApptCollected(!apptCollected)}
+            className={tile(apptCollected)}>
+            {apptCollected ? "✓ Already collected" : "Not collected yet"}
+          </button>
+
+          {/* Attribution — what produced this patient. Shown here rather than
+              hidden behind the optional links, because a new patient with no
+              source is the one thing the reports can't work backwards from. */}
+          <div className="space-y-2.5 rounded-xl bg-card p-4 shadow-card">
+            <p className="text-[0.8rem] font-medium text-soft">Where did this patient come from?</p>
+            {([
+              ["Business", accounts as Slim[], accountId, setAccountId],
+              ["Event", events as unknown as Slim[], eventId, setEventId],
+              ["Campaign", campaigns, campaignId, setCampaignId],
+            ] as [string, Slim[], number | null, (v: number | null) => void][]).map(([label, list, value, set]) => (
+              <label key={label} className="block">
+                <span className="mb-1 block text-[0.75rem] font-medium text-faint">{label}</span>
+                <select value={value ?? ""} onChange={(e) => set(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-xl border border-line bg-card px-3.5 py-2 text-sm outline-none focus:border-accent">
+                  <option value="">—</option>
+                  {list.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+
           <button className={continueBtn} onClick={() => go(orStanding("followup"))}>Continue</button>
         </Screen>
       )}

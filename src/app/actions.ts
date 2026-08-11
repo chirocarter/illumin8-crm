@@ -77,7 +77,13 @@ const num = (fd: FormData, k: string): number | null => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-const bool = (fd: FormData, k: string): boolean => fd.get(k) === "on" || fd.get(k) === "true";
+// "on" comes from checkboxes, "true"/"1" from code building a FormData by hand.
+// Accepting all three stops a silently-ignored flag: a value of "1" used to
+// read as false, so an appointment booked in the wizard was never created.
+const bool = (fd: FormData, k: string): boolean => {
+  const v = fd.get(k);
+  return v === "on" || v === "true" || v === "1";
+};
 
 function done(path?: string): never {
   revalidatePath("/", "layout");
@@ -434,6 +440,48 @@ export async function logActivity(fd: FormData) {
     }
     if (newStatus && (LEAD_APPT_STATUSES as readonly string[]).includes(newStatus)) {
       await db.update(s.leads).set({ apptStatus: newStatus }).where(eq(s.leads.id, leadId));
+    }
+  }
+
+  // A new-patient appointment booked during this conversation. Recorded as a
+  // real appointment — not just a note — so it counts in Appointments Booked,
+  // the money metrics and the by-office breakdown, attributed to whatever
+  // produced the patient (business, event or campaign).
+  if (bool(fd, "apptBooked")) {
+    const who = leadId
+      ? await db.query.leads.findFirst({ where: eq(s.leads.id, leadId) })
+      : null;
+    const person = who
+      ? `${who.firstName} ${who.lastName}`.trim()
+      : (contactId
+          ? await db.query.contacts.findFirst({ where: eq(s.contacts.id, contactId) })
+              .then((c) => (c ? `${c.firstName} ${c.lastName}`.trim() : ""))
+          : "");
+
+    await db.insert(s.appointments).values({
+      leadId,
+      contactId,
+      personName: person,
+      source: who?.source ?? "Outreach",
+      accountId,
+      eventId,
+      campaignId: num(fd, "campaignId"),
+      partnerId: num(fd, "partnerId"),
+      locationId: num(fd, "apptLocationId"),
+      scheduledAt: str(fd, "apptDate") ?? occurredAt,
+      status: "Booked",
+      revenue: num(fd, "apptRevenue") ?? 0,
+      collected: bool(fd, "apptCollected"),
+      ...own,
+    });
+
+    // The lead's own status should agree with the appointment that now exists.
+    if (leadId) {
+      await db.update(s.leads).set({
+        apptStatus: "Booked",
+        // Booking at a clinic makes that their preferred location.
+        ...(num(fd, "apptLocationId") ? { preferredLocationId: num(fd, "apptLocationId") } : {}),
+      }).where(eq(s.leads.id, leadId));
     }
   }
 

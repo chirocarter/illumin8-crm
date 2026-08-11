@@ -114,9 +114,27 @@ const OUTCOMES_BY_TYPE: Record<string, readonly string[]> = {
   Networking: MEETING_OUTCOMES,
 };
 
-/** The outcome choices that make sense for a given activity type. */
-export function outcomesFor(type: string | null): readonly string[] {
-  return (type && OUTCOMES_BY_TYPE[type]) || ACTIVITY_OUTCOMES;
+/**
+ * Booking a new-patient appointment — only meaningful when the person you're
+ * talking to is a prospective patient (a lead), which is why it isn't in the
+ * general outcome lists. Choosing it captures the appointment itself, so the
+ * patient is attributed to whatever produced them.
+ */
+export const APPOINTMENT_BOOKED_OUTCOME = "Appointment Booked";
+
+/**
+ * The outcome choices that make sense for a given activity type.
+ * `forLead` adds the patient-booking outcome, which would be nonsense on a
+ * conversation with a business contact.
+ */
+export function outcomesFor(type: string | null, forLead = false): readonly string[] {
+  const base = (type && OUTCOMES_BY_TYPE[type]) || ACTIVITY_OUTCOMES;
+  if (!forLead) return base;
+  // Right after the positive-interest outcomes, where it reads naturally.
+  const at = base.indexOf("Interested");
+  const out = [...base];
+  out.splice(at >= 0 ? at + 1 : out.length, 0, APPOINTMENT_BOOKED_OUTCOME);
+  return out;
 }
 
 // A "partnership conversation" is one where a partnership was actually
