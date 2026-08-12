@@ -286,26 +286,34 @@ export async function logActivity(fd: FormData) {
     const isScreening = type === "Screening Event";
     const eventType = isScreening ? "Gym Screening" : "Lunch and Learn";
     const screened = num(fd, "resultScreened") ?? 0;
-    {
-      const acct = accountId ? await db.query.accounts.findFirst({ where: eq(s.accounts.id, accountId) }) : null;
-      const [event] = await db.insert(s.events).values({
-        name: `${eventType}${acct ? ` — ${acct.name}` : ""}`,
-        type: eventType,
-        accountId,
-        contactId,
-        campaignId: num(fd, "campaignId"),
-        partnerId: num(fd, "partnerId"),
-        startsAt: occurredAt,
-        status: "Completed", // it already happened
-        bookedAt: nowISO(),
-        actualAttendees: screened,
-        screeningsCompleted: isScreening ? screened : 0,
-        notes: "Logged via activity.",
-        ...own,
-      }).returning();
-      eventId = event.id;
-    }
+    const acct = accountId ? await db.query.accounts.findFirst({ where: eq(s.accounts.id, accountId) }) : null;
+    const [event] = await db.insert(s.events).values({
+      name: `${eventType}${acct ? ` — ${acct.name}` : ""}`,
+      type: eventType,
+      accountId,
+      contactId,
+      campaignId: num(fd, "campaignId"),
+      partnerId: num(fd, "partnerId"),
+      startsAt: occurredAt,
+      status: "Completed", // it already happened
+      bookedAt: nowISO(),
+      actualAttendees: screened,
+      screeningsCompleted: isScreening ? screened : 0,
+      notes: "Logged via activity.",
+      ...own,
+    }).returning();
+    eventId = event.id;
+  }
 
+  // The people captured at a screening or lunch & learn.
+  //
+  // This MUST sit outside the block above. It used to live inside it, guarded by
+  // `!eventId` — so once closing out an already-scheduled event started setting
+  // eventId first, the guard was false and every lead and appointment was
+  // silently dropped. A screening reported against a booked event recorded its
+  // attendee count and nothing else.
+  if (type === "Screening Event" || type === "Lunch and Learn") {
+    const isScreening = type === "Screening Event";
     const source = isScreening ? "Screening" : "Event";
     // Each captured person → a lead. If they booked, also an appointment with
     // its own date, location, amount charged, and whether it's been collected.
