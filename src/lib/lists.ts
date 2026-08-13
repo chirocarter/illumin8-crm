@@ -47,6 +47,26 @@ function spNum(sp: SP, key: string): number | undefined {
   const n = v ? Number(v) : NaN;
   return Number.isFinite(n) ? n : undefined;
 }
+
+/**
+ * The page you're looking at right now, filters and all, for a form's `returnTo`.
+ *
+ * Acting on a row — ticking a task done, changing a status — has to land you
+ * back on the same filtered view. Redirecting to the bare list instead throws
+ * away the tab you were working through, which reads as being kicked out of it.
+ *
+ * Repeated params are kept repeated: `?status=A&status=B` must survive as both.
+ */
+export function currentUrl(path: string, sp: SP): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    for (const one of Array.isArray(v) ? v : v ? [v] : []) {
+      if (one) p.append(k, one);
+    }
+  }
+  const q = p.toString();
+  return q ? `${path}?${q}` : path;
+}
 /** exclusive upper bound for date-only params against datetime columns */
 const up = (to: string) => to + "T99";
 
@@ -466,10 +486,15 @@ export async function listTasks(sp: SP) {
       accountId: s.tasks.accountId, accountName: s.accounts.name,
       contactId: s.tasks.contactId, contactFirst: s.contacts.firstName, contactLast: s.contacts.lastName,
       opportunityId: s.tasks.opportunityId, eventId: s.tasks.eventId,
+      // Carried so a row can open the activity wizard already pointed at the
+      // right record — a follow-up on a lead must log against that lead.
+      leadId: s.tasks.leadId, projectId: s.tasks.projectId,
+      leadFirst: s.leads.firstName, leadLast: s.leads.lastName,
     })
     .from(s.tasks)
     .leftJoin(s.accounts, eq(s.tasks.accountId, s.accounts.id))
     .leftJoin(s.contacts, eq(s.tasks.contactId, s.contacts.id))
+    .leftJoin(s.leads, eq(s.tasks.leadId, s.leads.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(asc(s.tasks.status), asc(s.tasks.dueDate))
     .limit(LIMIT);

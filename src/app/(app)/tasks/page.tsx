@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { listTasks, type SP, spStr } from "@/lib/lists";
+import { listTasks, currentUrl, type SP, spStr } from "@/lib/lists";
 import { PageHeader, Card, Badge, BtnLink, EmptyState, RecordLink, pillSm } from "@/components/ui";
 import { setTaskStatus } from "@/app/actions";
 import { Icon } from "@/components/icons";
 import { fmtDate, todayISO } from "@/lib/dates";
+import { qs } from "@/lib/metrics";
 
 export const metadata = { title: "Tasks" };
 export const dynamic = "force-dynamic";
@@ -15,6 +16,28 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const rows = await listTasks(sp);
   const today = todayISO();
   const due = spStr(sp, "due");
+  // Ticking a task done or logging an activity comes back to this exact tab —
+  // Due today stays Due today, rather than dumping you on the full Open list.
+  const returnTo = currentUrl("/tasks", sp);
+
+  /**
+   * "Log activity" for a row, aimed at whatever that follow-up is actually about.
+   *
+   * A lead task passes `leadId` alone: the wizard treats an account as the
+   * subject whenever one is present, so sending both would quietly log a
+   * follow-up with a person against their business instead. Tasks tied to
+   * nothing (a plain reminder) get no button — there'd be no record to log to.
+   */
+  const logHref = (t: (typeof rows)[number]): string | null => {
+    if (t.leadId) return `/activities/new${qs({ leadId: t.leadId, returnTo })}`;
+    if (t.accountId || t.contactId || t.opportunityId || t.eventId || t.projectId) {
+      return `/activities/new${qs({
+        accountId: t.accountId, contactId: t.contactId, opportunityId: t.opportunityId,
+        eventId: t.eventId, projectId: t.projectId, returnTo,
+      })}`;
+    }
+    return null;
+  };
 
   const chip = (href: string, label: string, active: boolean) => (
     <Link href={href} className={active ? pillSm + " pill-active" : pillSm}>
@@ -47,6 +70,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                   <form action={setTaskStatus}>
                     <input type="hidden" name="id" value={t.id} />
                     <input type="hidden" name="status" value={t.status === "Completed" ? "Open" : "Completed"} />
+                    <input type="hidden" name="returnTo" value={returnTo} />
                     <button type="submit" title={t.status === "Completed" ? "Reopen" : "Mark complete"}
                       className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
                         t.status === "Completed"
@@ -68,6 +92,13 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                     {overdue ? `Overdue · ${fmtDate(t.dueDate)}` : fmtDate(t.dueDate)}
                   </span>
                   {t.status !== "Completed" && <Badge>{t.status}</Badge>}
+                  {t.status !== "Completed" && logHref(t) && (
+                    <Link href={logHref(t)!} title="Log an activity for this"
+                      className="flex shrink-0 items-center gap-1 rounded-full border border-line bg-card px-2.5 py-1 text-[0.7rem] font-medium text-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent-deep">
+                      <Icon name="plus" className="h-3 w-3" />
+                      <span className="hidden sm:inline">Log activity</span>
+                    </Link>
+                  )}
                   <RecordLink href={`/tasks/${t.id}/edit`} muted>Edit</RecordLink>
                 </li>
               );
