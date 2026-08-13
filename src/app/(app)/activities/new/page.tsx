@@ -50,7 +50,7 @@ export default async function LogActivityPage({ searchParams }: { searchParams: 
       prefill={{
         accountId: n("accountId"), contactId: n("contactId"), leadId: n("leadId"), opportunityId: n("opportunityId"),
         eventId: n("eventId"), partnerId: n("partnerId"), campaignId: n("campaignId"), projectId: n("projectId"),
-        returnTo: spStr(sp, "returnTo"), type: spStr(sp, "type"),
+        returnTo: spStr(sp, "returnTo"), type: spStr(sp, "type"), taskId: n("taskId"),
       }}
     />
   );

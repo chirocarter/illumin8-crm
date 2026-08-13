@@ -38,6 +38,8 @@ type SlimPartner = { id: number; accountId: number };
 type Prefill = Partial<{
   accountId: number; contactId: number; leadId: number; opportunityId: number; eventId: number;
   partnerId: number; campaignId: number; projectId: number; returnTo: string; type: string;
+  /** The task whose "Log activity" button opened this — closed on save. */
+  taskId: number;
 }>;
 
 type Phase =
@@ -399,6 +401,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
       if (createTask) fd.set("createTask", "on");
     }
     if (prefill.returnTo) fd.set("returnTo", prefill.returnTo);
+    if (prefill.taskId) fd.set("taskId", String(prefill.taskId));
     startSaving(async () => { await logActivity(fd); });
   };
 

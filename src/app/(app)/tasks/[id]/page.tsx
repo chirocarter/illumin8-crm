@@ -169,6 +169,8 @@ export default async function TaskDetail({ params, searchParams }: {
                 <BtnLink
                   href={`/activities/new${qs({
                     accountId: task.accountId, contactId: task.contactId,
+                    // Makes the promise below true for hand-written tasks too.
+                    taskId: task.id,
                     returnTo: `/tasks/${id}${from ? `?from=${from}` : ""}`,
                   })}`}>
                   Log an activity

@@ -563,6 +563,27 @@ export async function logActivity(fd: FormData) {
     }
   }
 
+  // Started from a task's own "Log activity" button, so close THAT task —
+  // whatever its origin, and whoever the activity ended up being with.
+  //
+  // The rule above is deliberately cautious because it guesses which follow-ups
+  // a conversation settled. There's nothing to guess here: you clicked Log
+  // activity on one specific row, which says plainly that this is the work.
+  // That covers hand-written to-dos, which the guessing rule leaves alone.
+  const fromTaskId = num(fd, "taskId");
+  if (fromTaskId) {
+    await assertOwned(s.tasks, fromTaskId);
+    const task = await db.query.tasks.findFirst({ where: eq(s.tasks.id, fromTaskId) });
+    // Already ticked off: leave the original completion date alone.
+    if (task && task.status === "Open") {
+      await db.update(s.tasks).set({
+        status: "Completed",
+        completedAt: nowISO(),
+        notes: `${task.notes ? task.notes + " · " : ""}Completed — ${type.toLowerCase()} logged ${fmtDate(occurredAt)}.`,
+      }).where(eq(s.tasks.id, fromTaskId));
+    }
+  }
+
   // Optionally spawn a follow-up task straight from the activity.
   if (nextFollowUpAt && bool(fd, "createTask")) {
     const projectId = num(fd, "projectId");

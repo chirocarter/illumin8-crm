@@ -27,13 +27,17 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
    * subject whenever one is present, so sending both would quietly log a
    * follow-up with a person against their business instead. Tasks tied to
    * nothing (a plain reminder) get no button — there'd be no record to log to.
+   *
+   * `taskId` rides along so saving closes this exact task, hand-written ones
+   * included. Arriving here by clicking that row's button is a clear enough
+   * statement of intent that nothing has to be inferred from who was spoken to.
    */
   const logHref = (t: (typeof rows)[number]): string | null => {
-    if (t.leadId) return `/activities/new${qs({ leadId: t.leadId, returnTo })}`;
+    if (t.leadId) return `/activities/new${qs({ leadId: t.leadId, taskId: t.id, returnTo })}`;
     if (t.accountId || t.contactId || t.opportunityId || t.eventId || t.projectId) {
       return `/activities/new${qs({
         accountId: t.accountId, contactId: t.contactId, opportunityId: t.opportunityId,
-        eventId: t.eventId, projectId: t.projectId, returnTo,
+        eventId: t.eventId, projectId: t.projectId, taskId: t.id, returnTo,
       })}`;
     }
     return null;
