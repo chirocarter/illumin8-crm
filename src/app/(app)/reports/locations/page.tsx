@@ -76,18 +76,20 @@ export default async function LocationReport() {
 
       <Card className="mt-5">
         <CardHeader title="By Business Area" />
-        <table className="tbl">
-          <thead><tr><th>Area</th><th className="text-right">Businesses</th><th className="text-right">Leads via those businesses</th></tr></thead>
-          <tbody>
-            {areas.map((a) => (
-              <tr key={a.area}>
-                <td className="font-medium">{a.area}</td>
-                <td className="text-right"><DrillNumber value={Number(a.accounts)} href={`/accounts${qs({ area: a.area })}`} /></td>
-                <td className="text-right text-soft">{Number(a.leads)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead><tr><th>Area</th><th className="text-right">Businesses</th><th className="text-right">Leads via those businesses</th></tr></thead>
+            <tbody>
+              {areas.map((a) => (
+                <tr key={a.area}>
+                  <td className="font-medium">{a.area}</td>
+                  <td className="text-right"><DrillNumber value={Number(a.accounts)} href={`/accounts${qs({ area: a.area })}`} /></td>
+                  <td className="text-right text-soft">{Number(a.leads)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );

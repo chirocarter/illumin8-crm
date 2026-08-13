@@ -92,17 +92,19 @@ export default async function AccountDetail({ params, searchParams }: {
             {opportunities.length === 0 ? (
               <p className="px-5 pb-4 text-sm text-faint">No opportunities yet.</p>
             ) : (
-              <table className="tbl">
-                <thead><tr><th>Name</th><th>Stage</th><th>Type</th><th>Next follow-up</th></tr></thead>
-                <tbody>{opportunities.map((o) => (
-                  <tr key={o.id}>
-                    <td><RecordLink href={`/opportunities/${o.id}`}>{o.name}</RecordLink></td>
-                    <td><Badge>{o.stage}</Badge></td>
-                    <td className="text-soft">{o.type}</td>
-                    <td className="text-soft">{fmtDate(o.nextFollowUpAt)}</td>
-                  </tr>))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>Name</th><th>Stage</th><th>Type</th><th>Next follow-up</th></tr></thead>
+                  <tbody>{opportunities.map((o) => (
+                    <tr key={o.id}>
+                      <td><RecordLink href={`/opportunities/${o.id}`}>{o.name}</RecordLink></td>
+                      <td><Badge>{o.stage}</Badge></td>
+                      <td className="text-soft">{o.type}</td>
+                      <td className="text-soft">{fmtDate(o.nextFollowUpAt)}</td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </Card>
 
@@ -113,23 +115,25 @@ export default async function AccountDetail({ params, searchParams }: {
             {events.length === 0 ? (
               <p className="px-5 pb-4 text-sm text-faint">No events with this business yet.</p>
             ) : (
-              <table className="tbl">
-                <thead><tr><th>Event</th><th>Date</th><th>Status</th><th>Appts</th></tr></thead>
-                <tbody>{events.map((e) => {
-                  const apptCount = appointments.filter((a) => a.eventId === e.id).length;
-                  return (
-                    <tr key={e.id}>
-                      <td><RecordLink href={`/events/${e.id}`}>{e.name}</RecordLink></td>
-                      <td className="text-soft">{fmtDateTime(e.startsAt)}</td>
-                      <td><Badge>{e.status}</Badge></td>
-                      <td>{apptCount > 0
-                        ? <RecordLink href={`/appointments${qs({ eventId: e.id })}`}>{apptCount}</RecordLink>
-                        : <span className="text-faint">0</span>}</td>
-                    </tr>
-                  );
-                })}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>Event</th><th>Date</th><th>Status</th><th>Appts</th></tr></thead>
+                  <tbody>{events.map((e) => {
+                    const apptCount = appointments.filter((a) => a.eventId === e.id).length;
+                    return (
+                      <tr key={e.id}>
+                        <td><RecordLink href={`/events/${e.id}`}>{e.name}</RecordLink></td>
+                        <td className="text-soft">{fmtDateTime(e.startsAt)}</td>
+                        <td><Badge>{e.status}</Badge></td>
+                        <td>{apptCount > 0
+                          ? <RecordLink href={`/appointments${qs({ eventId: e.id })}`}>{apptCount}</RecordLink>
+                          : <span className="text-faint">0</span>}</td>
+                      </tr>
+                    );
+                  })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </Card>
 

@@ -42,16 +42,18 @@ export default async function ActivityReport({ searchParams }: { searchParams: P
       <div className="grid gap-5 md:grid-cols-5">
         <Card className="md:col-span-3">
           <CardHeader title="Activity Metrics" />
-          <table className="tbl">
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.key}>
-                  <td className="text-soft">{r.label}</td>
-                  <td className="text-right"><DrillNumber value={r.value} href={r.href} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.key}>
+                    <td className="text-soft">{r.label}</td>
+                    <td className="text-right"><DrillNumber value={r.value} href={r.href} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         <Card className="md:col-span-2">

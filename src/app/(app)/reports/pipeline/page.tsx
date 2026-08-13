@@ -47,17 +47,19 @@ export default async function PipelineReport() {
   const groupTable = (title: string, rows: { k: string; c: number | string }[], hrefFor: (k: string) => string) => (
     <Card>
       <CardHeader title={title} />
-      <table className="tbl">
-        <thead><tr><th>{title.replace("Open Pipeline by ", "")}</th><th className="text-right">Count</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.k}>
-              <td className="text-soft">{r.k}</td>
-              <td className="text-right"><DrillNumber value={Number(r.c)} href={hrefFor(r.k)} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="tbl">
+          <thead><tr><th>{title.replace("Open Pipeline by ", "")}</th><th className="text-right">Count</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.k}>
+                <td className="text-soft">{r.k}</td>
+                <td className="text-right"><DrillNumber value={Number(r.c)} href={hrefFor(r.k)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 
@@ -90,17 +92,19 @@ export default async function PipelineReport() {
         {groupTable("Open Pipeline by Vertical", byVertical, (k) => `/opportunities${qs({ vertical: k, open: 1 })}`)}
         <Card>
           <CardHeader title="Open Pipeline by Location" />
-          <table className="tbl">
-            <thead><tr><th>Location</th><th className="text-right">Count</th></tr></thead>
-            <tbody>
-              {byLocation.map((r) => (
-                <tr key={r.id}>
-                  <td className="text-soft">{r.k}</td>
-                  <td className="text-right"><DrillNumber value={Number(r.c)} href={`/opportunities${qs({ locationId: r.id, open: 1 })}`} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <thead><tr><th>Location</th><th className="text-right">Count</th></tr></thead>
+              <tbody>
+                {byLocation.map((r) => (
+                  <tr key={r.id}>
+                    <td className="text-soft">{r.k}</td>
+                    <td className="text-right"><DrillNumber value={Number(r.c)} href={`/opportunities${qs({ locationId: r.id, open: 1 })}`} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
 
@@ -109,18 +113,20 @@ export default async function PipelineReport() {
         {likely.length === 0 ? (
           <p className="px-5 pb-4 text-sm text-faint">Nothing in late stages with an expected date yet.</p>
         ) : (
-          <table className="tbl">
-            <thead><tr><th>Opportunity</th><th>Stage</th><th>Expected Date</th></tr></thead>
-            <tbody>
-              {likely.map((o) => (
-                <tr key={o.id}>
-                  <td><RecordLink href={`/opportunities/${o.id}`}>{o.name}</RecordLink></td>
-                  <td><Badge>{o.stage}</Badge></td>
-                  <td className="text-soft">{fmtDate(o.expectedEventDate)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <thead><tr><th>Opportunity</th><th>Stage</th><th>Expected Date</th></tr></thead>
+              <tbody>
+                {likely.map((o) => (
+                  <tr key={o.id}>
+                    <td><RecordLink href={`/opportunities/${o.id}`}>{o.name}</RecordLink></td>
+                    <td><Badge>{o.stage}</Badge></td>
+                    <td className="text-soft">{fmtDate(o.expectedEventDate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
     </div>

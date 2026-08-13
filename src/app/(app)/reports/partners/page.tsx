@@ -85,21 +85,23 @@ export default async function PartnerReport() {
 
       <Card className="mt-5">
         <CardHeader title="Best-Performing Campaigns" />
-        <table className="tbl">
-          <thead><tr><th>Campaign</th><th>Type</th><th className="text-right">Leads</th><th className="text-right">Appointments</th><th className="text-right">Lead → Appt</th><th className="text-right">Collected</th></tr></thead>
-          <tbody>
-            {bestCampaigns.map((c) => (
-              <tr key={c.id}>
-                <td><RecordLink href={`/campaigns/${c.id}`}>{c.name}</RecordLink></td>
-                <td className="text-soft">{c.type}</td>
-                <td className="text-right"><DrillNumber value={Number(c.leads)} href={`/leads${qs({ campaignId: c.id })}`} /></td>
-                <td className="text-right"><DrillNumber value={Number(c.appts)} href={`/appointments${qs({ campaignId: c.id })}`} /></td>
-                <td className="text-right text-soft">{Number(c.leads) > 0 ? `${Math.round((Number(c.appts) / Number(c.leads)) * 100)}%` : "—"}</td>
-                <td className="text-right text-soft">{fmtMoney(Number(c.collected))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead><tr><th>Campaign</th><th>Type</th><th className="text-right">Leads</th><th className="text-right">Appointments</th><th className="text-right">Lead → Appt</th><th className="text-right">Collected</th></tr></thead>
+            <tbody>
+              {bestCampaigns.map((c) => (
+                <tr key={c.id}>
+                  <td><RecordLink href={`/campaigns/${c.id}`}>{c.name}</RecordLink></td>
+                  <td className="text-soft">{c.type}</td>
+                  <td className="text-right"><DrillNumber value={Number(c.leads)} href={`/leads${qs({ campaignId: c.id })}`} /></td>
+                  <td className="text-right"><DrillNumber value={Number(c.appts)} href={`/appointments${qs({ campaignId: c.id })}`} /></td>
+                  <td className="text-right text-soft">{Number(c.leads) > 0 ? `${Math.round((Number(c.appts) / Number(c.leads)) * 100)}%` : "—"}</td>
+                  <td className="text-right text-soft">{fmtMoney(Number(c.collected))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );

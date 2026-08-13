@@ -153,22 +153,24 @@ export default async function PerformanceReport({ searchParams }: { searchParams
   const metricTable = (title: string, keys: string[]) => (
     <Card className="print-keep">
       <CardHeader title={title} />
-      <table className="tbl">
-        <thead><tr>
-          <th>Metric</th>
-          <th className="text-right">This {unit}</th>
-          <th className="text-right">vs {prevLabel}</th>
-        </tr></thead>
-        <tbody>
-          {keys.map((k) => (
-            <tr key={k}>
-              <td className="text-soft">{m[k].label}</td>
-              <td className="text-right"><DrillNumber value={m[k].value} href={m[k].href} /></td>
-              <td className="text-right"><Delta diff={delta(k)} invert={k === "no_shows"} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="tbl">
+          <thead><tr>
+            <th>Metric</th>
+            <th className="text-right">This {unit}</th>
+            <th className="text-right">vs {prevLabel}</th>
+          </tr></thead>
+          <tbody>
+            {keys.map((k) => (
+              <tr key={k}>
+                <td className="text-soft">{m[k].label}</td>
+                <td className="text-right"><DrillNumber value={m[k].value} href={m[k].href} /></td>
+                <td className="text-right"><Delta diff={delta(k)} invert={k === "no_shows"} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 
@@ -282,27 +284,29 @@ export default async function PerformanceReport({ searchParams }: { searchParams
         <Card className="print-keep">
           <CardHeader title="Marketing Spend" action={
             <span className="hidden text-xs text-faint sm:inline">Hours × each person&apos;s rate, plus spend</span>} />
-          <table className="tbl">
-            <thead><tr>
-              <th>Metric</th><th className="text-right">This {unit}</th><th className="text-right">vs {prevLabel}</th>
-            </tr></thead>
-            <tbody>
-              {spendRows.map((k) => (
-                <tr key={k}>
-                  <td className="text-soft">{m[k].label}</td>
-                  <td className="text-right">
-                    <DrillNumber
-                      value={isMoneyRow(k) ? money(m[k].value) : m[k].value.toFixed(1)}
-                      href={m[k].href} />
-                  </td>
-                  <td className="text-right text-xs text-faint">
-                    {isMoneyRow(k) ? money(Math.abs(delta(k))) : Math.abs(delta(k)).toFixed(1)}
-                    {delta(k) >= 0 ? " more" : " less"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <thead><tr>
+                <th>Metric</th><th className="text-right">This {unit}</th><th className="text-right">vs {prevLabel}</th>
+              </tr></thead>
+              <tbody>
+                {spendRows.map((k) => (
+                  <tr key={k}>
+                    <td className="text-soft">{m[k].label}</td>
+                    <td className="text-right">
+                      <DrillNumber
+                        value={isMoneyRow(k) ? money(m[k].value) : m[k].value.toFixed(1)}
+                        href={m[k].href} />
+                    </td>
+                    <td className="text-right text-xs text-faint">
+                      {isMoneyRow(k) ? money(Math.abs(delta(k))) : Math.abs(delta(k)).toFixed(1)}
+                      {delta(k) >= 0 ? " more" : " less"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         {/* Which office the new patients went to */}
@@ -312,99 +316,107 @@ export default async function PerformanceReport({ searchParams }: { searchParams
           {byOffice.length === 0 ? (
             <p className="px-5 pb-5 pt-1 text-sm text-faint">No appointments booked this {unit}.</p>
           ) : (
-            <table className="tbl">
-              <thead><tr>
-                <th>Office</th>
-                <th className="text-right">Patients</th>
-                <th className="text-right">Collected</th>
-              </tr></thead>
-              <tbody>
-                {byOffice
-                  .slice()
-                  .sort((a, b) => Number(b.appts) - Number(a.appts))
-                  .map((o) => (
-                    <tr key={o.locationId ?? "none"}>
-                      <td className="text-soft">{o.office ?? "No office set"}</td>
-                      <td className="text-right">
-                        {/* "none" rather than an omitted param — otherwise the
-                            unassigned row would open every appointment. */}
-                        <DrillNumber value={Number(o.appts)}
-                          href={`/appointments${qs({ cfrom: cur.from, cto: cur.to, locationId: o.locationId ?? "none", ...link })}`} />
-                      </td>
-                      <td className="text-right text-soft">{money(Number(o.collected ?? 0))}</td>
-                    </tr>
-                  ))}
-                <tr>
-                  <td className="font-medium">Total</td>
-                  <td className="text-right font-medium">
-                    {byOffice.reduce((n, o) => n + Number(o.appts), 0)}
-                  </td>
-                  <td className="text-right font-medium">
-                    {money(byOffice.reduce((n, o) => n + Number(o.collected ?? 0), 0))}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="tbl">
+                <thead><tr>
+                  <th>Office</th>
+                  <th className="text-right">Patients</th>
+                  <th className="text-right">Collected</th>
+                </tr></thead>
+                <tbody>
+                  {byOffice
+                    .slice()
+                    .sort((a, b) => Number(b.appts) - Number(a.appts))
+                    .map((o) => (
+                      <tr key={o.locationId ?? "none"}>
+                        <td className="text-soft">{o.office ?? "No office set"}</td>
+                        <td className="text-right">
+                          {/* "none" rather than an omitted param — otherwise the
+                              unassigned row would open every appointment. */}
+                          <DrillNumber value={Number(o.appts)}
+                            href={`/appointments${qs({ cfrom: cur.from, cto: cur.to, locationId: o.locationId ?? "none", ...link })}`} />
+                        </td>
+                        <td className="text-right text-soft">{money(Number(o.collected ?? 0))}</td>
+                      </tr>
+                    ))}
+                  <tr>
+                    <td className="font-medium">Total</td>
+                    <td className="text-right font-medium">
+                      {byOffice.reduce((n, o) => n + Number(o.appts), 0)}
+                    </td>
+                    <td className="text-right font-medium">
+                      {money(byOffice.reduce((n, o) => n + Number(o.collected ?? 0), 0))}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
 
         <Card className="print-keep">
           <CardHeader title="Conversion Rates" />
-          <table className="tbl">
-            <tbody>
-              {rates.map((r) => (
-                <tr key={r.label}>
-                  <td className="text-soft">{r.label}</td>
-                  <td className="text-right"><DrillNumber value={r.value} href={r.href} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <tbody>
+                {rates.map((r) => (
+                  <tr key={r.label}>
+                    <td className="text-soft">{r.label}</td>
+                    <td className="text-right"><DrillNumber value={r.value} href={r.href} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         <Card className="print-keep">
           <CardHeader title="Pipeline (as of today)" />
-          <table className="tbl">
-            <tbody>
-              <tr>
-                <td className="text-soft">Open opportunities</td>
-                <td className="text-right"><DrillNumber value={Number(openOpps[0]?.c ?? 0)} href={`/opportunities${qs({ open: "1", ...link })}`} /></td>
-              </tr>
-              <tr>
-                <td className="text-soft">Stale (14+ days in stage)</td>
-                <td className="text-right"><DrillNumber value={Number(staleOpps[0]?.c ?? 0)} href={`/opportunities${qs({ stale: "1", ...link })}`} /></td>
-              </tr>
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <tbody>
+                <tr>
+                  <td className="text-soft">Open opportunities</td>
+                  <td className="text-right"><DrillNumber value={Number(openOpps[0]?.c ?? 0)} href={`/opportunities${qs({ open: "1", ...link })}`} /></td>
+                </tr>
+                <tr>
+                  <td className="text-soft">Stale (14+ days in stage)</td>
+                  <td className="text-right"><DrillNumber value={Number(staleOpps[0]?.c ?? 0)} href={`/opportunities${qs({ stale: "1", ...link })}`} /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
 
       {/* Goal pace */}
       <Card className="mt-5 print-keep">
         <CardHeader title={`Goal Pace${weeksInPeriod > 1 ? ` (weekly targets × ${weeksInPeriod})` : ""}`} />
-        <table className="tbl">
-          <thead><tr>
-            <th>Goal</th><th className="text-right">Actual</th><th className="text-right">Target</th><th className="text-right">Progress</th>
-          </tr></thead>
-          <tbody>
-            {goals.map((g) => {
-              const metric = m[g.metric];
-              if (!metric) return null;
-              const target = g.weeklyTarget * weeksInPeriod;
-              const pct = target > 0 ? Math.round((metric.value / target) * 100) : 0;
-              return (
-                <tr key={g.id}>
-                  <td className="text-soft">{g.label}</td>
-                  <td className="text-right"><DrillNumber value={metric.value} href={metric.href} /></td>
-                  <td className="text-right text-soft">{target}</td>
-                  <td className="text-right">
-                    <span className={`font-medium ${pct >= 100 ? "text-good" : pct >= 60 ? "text-accent-deep" : "text-soft"}`}>{pct}%</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead><tr>
+              <th>Goal</th><th className="text-right">Actual</th><th className="text-right">Target</th><th className="text-right">Progress</th>
+            </tr></thead>
+            <tbody>
+              {goals.map((g) => {
+                const metric = m[g.metric];
+                if (!metric) return null;
+                const target = g.weeklyTarget * weeksInPeriod;
+                const pct = target > 0 ? Math.round((metric.value / target) * 100) : 0;
+                return (
+                  <tr key={g.id}>
+                    <td className="text-soft">{g.label}</td>
+                    <td className="text-right"><DrillNumber value={metric.value} href={metric.href} /></td>
+                    <td className="text-right text-soft">{target}</td>
+                    <td className="text-right">
+                      <span className={`font-medium ${pct >= 100 ? "text-good" : pct >= 60 ? "text-accent-deep" : "text-soft"}`}>{pct}%</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <p className="mt-4 text-xs text-faint print:mt-5 print:border-t print:border-line print:pt-3">

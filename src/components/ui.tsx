@@ -4,7 +4,12 @@ import { Icon } from "./icons";
 
 export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-card bg-card shadow-card ${className}`}>
+    // min-w-0 because a card is usually a grid or flex item, and those default
+    // to min-width:auto — refusing to shrink below their content. One wide
+    // table inside then widens the whole page instead of scrolling in its own
+    // box, and the phone gets a sideways scroll on every screen. Harmless
+    // anywhere else: min-width only bites inside a grid or flex parent.
+    <div className={`min-w-0 rounded-card bg-card shadow-card ${className}`}>
       {children}
     </div>
   );

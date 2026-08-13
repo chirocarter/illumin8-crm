@@ -199,6 +199,25 @@ body {
   outline-offset: 2px;
 }
 
+/* Grid and flex children default to min-width:auto, which means they refuse to
+   shrink below their own content. One wide table or one long unbroken name then
+   widens its column past the screen, and the whole PAGE scrolls sideways on a
+   phone rather than the table scrolling inside its own box.
+
+   This has bitten the spend page and every report, so it is fixed here for the
+   whole app instead of one min-w-0 at a time.
+
+   It MUST stay inside @layer base. Unlayered CSS beats every layered rule no
+   matter how specific, so out here it would silently swallow any future
+   min-w-* utility on a grid or flex child — the same trap the unlayered
+   scrollbar-width rule set for the .no-scrollbar utilities. In the base layer
+   Tailwind's utilities come later and win, which is what you want. */
+@layer base {
+  :where(.grid, .flex) > :where(*) {
+    min-width: 0;
+  }
+}
+
 /* Clean table system used across every list page */
 .tbl {
   width: 100%;
@@ -290,6 +309,11 @@ body {
   }
   /* Gradient rings and glows are screen affordances; on paper they smear. */
   .pill-active, .btn-glow { background: none !important; border-color: var(--color-line) !important; }
+
+  /* Horizontal scroll is a screen affordance. On paper there is nothing to
+     scroll, so a scroll box would silently crop the columns that are out of
+     view — the report would look complete while missing data. Let it flow. */
+  .overflow-x-auto { overflow: visible !important; }
 
   table { break-inside: auto; width: 100%; }
   tr, .print-keep { break-inside: avoid; }

@@ -43,38 +43,42 @@ export default async function OutcomeReport({ searchParams }: { searchParams: Pr
       <div className="grid gap-5 md:grid-cols-2">
         <Card>
           <CardHeader title="Outcomes" />
-          <table className="tbl">
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.key}>
-                  <td className="text-soft">{r.label}</td>
-                  <td className="text-right"><DrillNumber value={r.value} href={r.href} /></td>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.key}>
+                    <td className="text-soft">{r.label}</td>
+                    <td className="text-right"><DrillNumber value={r.value} href={r.href} /></td>
+                  </tr>
+                ))}
+                <tr>
+                  <td className="text-soft">Money charged (appointments booked in range)</td>
+                  <td className="text-right"><DrillNumber value={fmtMoney(m.money_charged.value)} href={m.money_charged.href} /></td>
                 </tr>
-              ))}
-              <tr>
-                <td className="text-soft">Money charged (appointments booked in range)</td>
-                <td className="text-right"><DrillNumber value={fmtMoney(m.money_charged.value)} href={m.money_charged.href} /></td>
-              </tr>
-              <tr>
-                <td className="text-soft">Money collected</td>
-                <td className="text-right"><DrillNumber value={fmtMoney(m.money_collected.value)} href={m.money_collected.href} /></td>
-              </tr>
-            </tbody>
-          </table>
+                <tr>
+                  <td className="text-soft">Money collected</td>
+                  <td className="text-right"><DrillNumber value={fmtMoney(m.money_collected.value)} href={m.money_collected.href} /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         <Card>
           <CardHeader title="Conversion Rates" />
-          <table className="tbl">
-            <tbody>
-              {rates.map((r) => (
-                <tr key={r.label}>
-                  <td className="text-soft">{r.label}</td>
-                  <td className="text-right"><DrillNumber value={r.value} href={r.href} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <tbody>
+                {rates.map((r) => (
+                  <tr key={r.label}>
+                    <td className="text-soft">{r.label}</td>
+                    <td className="text-right"><DrillNumber value={r.value} href={r.href} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <p className="px-5 pb-4 text-xs text-faint">
             Rates are computed from the raw counts above — click any rate to inspect the records it's based on.
           </p>

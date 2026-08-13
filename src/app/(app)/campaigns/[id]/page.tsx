@@ -92,33 +92,37 @@ export default async function CampaignDetail({ params, searchParams }: {
             {leads.length === 0 ? (
               <p className="px-5 pb-4 text-sm text-faint">No leads yet — add them as cards/scans come in.</p>
             ) : (
-              <table className="tbl">
-                <thead><tr><th>Name</th><th>Interest</th><th>Appt Status</th><th>Added</th></tr></thead>
-                <tbody>{leads.slice(0, 12).map((l) => (
-                  <tr key={l.id}>
-                    <td><RecordLink href={`/leads/${l.id}`}>{l.firstName} {l.lastName}</RecordLink></td>
-                    <td><Badge>{l.interestLevel}</Badge></td>
-                    <td><Badge>{l.apptStatus}</Badge></td>
-                    <td className="text-soft">{fmtDate(l.createdAt)}</td>
-                  </tr>))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>Name</th><th>Interest</th><th>Appt Status</th><th>Added</th></tr></thead>
+                  <tbody>{leads.slice(0, 12).map((l) => (
+                    <tr key={l.id}>
+                      <td><RecordLink href={`/leads/${l.id}`}>{l.firstName} {l.lastName}</RecordLink></td>
+                      <td><Badge>{l.interestLevel}</Badge></td>
+                      <td><Badge>{l.apptStatus}</Badge></td>
+                      <td className="text-soft">{fmtDate(l.createdAt)}</td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </Card>
 
           {events.length > 0 && (
             <Card>
               <CardHeader title="Events" />
-              <table className="tbl">
-                <thead><tr><th>Event</th><th>Date</th><th>Status</th></tr></thead>
-                <tbody>{events.map((e) => (
-                  <tr key={e.id}>
-                    <td><RecordLink href={`/events/${e.id}`}>{e.name}</RecordLink></td>
-                    <td className="text-soft">{fmtDateTime(e.startsAt)}</td>
-                    <td><Badge>{e.status}</Badge></td>
-                  </tr>))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>Event</th><th>Date</th><th>Status</th></tr></thead>
+                  <tbody>{events.map((e) => (
+                    <tr key={e.id}>
+                      <td><RecordLink href={`/events/${e.id}`}>{e.name}</RecordLink></td>
+                      <td className="text-soft">{fmtDateTime(e.startsAt)}</td>
+                      <td><Badge>{e.status}</Badge></td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           )}
 

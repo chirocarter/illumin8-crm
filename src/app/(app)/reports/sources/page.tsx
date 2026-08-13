@@ -50,54 +50,60 @@ export default async function SourceReport({ searchParams }: { searchParams: Pro
         <Card>
           <CardHeader title="Leads by Source (in range)" />
           {leadsBySource.length === 0 ? <p className="px-5 pb-4 text-sm text-faint">No leads in this range.</p> : (
-            <table className="tbl">
-              <thead><tr><th>Source</th><th className="text-right">Leads</th></tr></thead>
-              <tbody>
-                {leadsBySource.map((r) => (
-                  <tr key={r.k}>
-                    <td className="text-soft">{r.k}</td>
-                    <td className="text-right"><DrillNumber value={Number(r.c)} href={`/leads${qs({ source: r.k, from, to })}`} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="tbl">
+                <thead><tr><th>Source</th><th className="text-right">Leads</th></tr></thead>
+                <tbody>
+                  {leadsBySource.map((r) => (
+                    <tr key={r.k}>
+                      <td className="text-soft">{r.k}</td>
+                      <td className="text-right"><DrillNumber value={Number(r.c)} href={`/leads${qs({ source: r.k, from, to })}`} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
 
         <Card>
           <CardHeader title="Appointments by Source (booked in range)" />
           {apptsBySource.length === 0 ? <p className="px-5 pb-4 text-sm text-faint">No appointments booked in this range.</p> : (
-            <table className="tbl">
-              <thead><tr><th>Source</th><th className="text-right">Appointments</th><th className="text-right">Charged</th><th className="text-right">Collected</th></tr></thead>
-              <tbody>
-                {apptsBySource.map((r) => (
-                  <tr key={r.k}>
-                    <td className="text-soft">{r.k}</td>
-                    <td className="text-right"><DrillNumber value={Number(r.c)} href={`/appointments${qs({ source: r.k, cfrom: from, cto: to })}`} /></td>
-                    <td className="text-right text-soft">{fmtMoney(Number(r.charged))}</td>
-                    <td className="text-right text-soft">{fmtMoney(Number(r.collected))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="tbl">
+                <thead><tr><th>Source</th><th className="text-right">Appointments</th><th className="text-right">Charged</th><th className="text-right">Collected</th></tr></thead>
+                <tbody>
+                  {apptsBySource.map((r) => (
+                    <tr key={r.k}>
+                      <td className="text-soft">{r.k}</td>
+                      <td className="text-right"><DrillNumber value={Number(r.c)} href={`/appointments${qs({ source: r.k, cfrom: from, cto: to })}`} /></td>
+                      <td className="text-right text-soft">{fmtMoney(Number(r.charged))}</td>
+                      <td className="text-right text-soft">{fmtMoney(Number(r.collected))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       </div>
 
       <Card className="mt-5">
         <CardHeader title="Campaign Types — All Time" />
-        <table className="tbl">
-          <thead><tr><th>Campaign type</th><th className="text-right">Leads</th><th className="text-right">Appointments</th></tr></thead>
-          <tbody>
-            {campaignTypes.map((r) => (
-              <tr key={r.k}>
-                <td className="text-soft">{r.k}</td>
-                <td className="text-right">{Number(r.leads)}</td>
-                <td className="text-right">{Number(r.appts)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead><tr><th>Campaign type</th><th className="text-right">Leads</th><th className="text-right">Appointments</th></tr></thead>
+            <tbody>
+              {campaignTypes.map((r) => (
+                <tr key={r.k}>
+                  <td className="text-soft">{r.k}</td>
+                  <td className="text-right">{Number(r.leads)}</td>
+                  <td className="text-right">{Number(r.appts)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <p className="px-5 pb-4 text-xs text-faint">Totals across all campaigns of each type. Open a campaign for its full funnel.</p>
       </Card>
     </div>

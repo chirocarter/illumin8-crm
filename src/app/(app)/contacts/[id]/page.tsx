@@ -60,49 +60,55 @@ export default async function ContactDetail({ params, searchParams }: {
           {opportunities.length > 0 && (
             <Card>
               <CardHeader title="Opportunities" />
-              <table className="tbl">
-                <thead><tr><th>Name</th><th>Stage</th><th>Type</th></tr></thead>
-                <tbody>{opportunities.map((o) => (
-                  <tr key={o.id}>
-                    <td><RecordLink href={`/opportunities/${o.id}`}>{o.name}</RecordLink></td>
-                    <td><Badge>{o.stage}</Badge></td>
-                    <td className="text-soft">{o.type}</td>
-                  </tr>))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>Name</th><th>Stage</th><th>Type</th></tr></thead>
+                  <tbody>{opportunities.map((o) => (
+                    <tr key={o.id}>
+                      <td><RecordLink href={`/opportunities/${o.id}`}>{o.name}</RecordLink></td>
+                      <td><Badge>{o.stage}</Badge></td>
+                      <td className="text-soft">{o.type}</td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           )}
 
           {events.length > 0 && (
             <Card>
               <CardHeader title="Events" />
-              <table className="tbl">
-                <thead><tr><th>Event</th><th>Date</th><th>Status</th></tr></thead>
-                <tbody>{events.map((e) => (
-                  <tr key={e.id}>
-                    <td><RecordLink href={`/events/${e.id}`}>{e.name}</RecordLink></td>
-                    <td className="text-soft">{fmtDateTime(e.startsAt)}</td>
-                    <td><Badge>{e.status}</Badge></td>
-                  </tr>))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>Event</th><th>Date</th><th>Status</th></tr></thead>
+                  <tbody>{events.map((e) => (
+                    <tr key={e.id}>
+                      <td><RecordLink href={`/events/${e.id}`}>{e.name}</RecordLink></td>
+                      <td className="text-soft">{fmtDateTime(e.startsAt)}</td>
+                      <td><Badge>{e.status}</Badge></td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           )}
 
           {appointments.length > 0 && (
             <Card>
               <CardHeader title="Appointments" />
-              <table className="tbl">
-                <thead><tr><th>When</th><th>Status</th><th>Charged</th><th>Collected?</th></tr></thead>
-                <tbody>{appointments.map((a) => (
-                  <tr key={a.id}>
-                    <td><RecordLink href={`/appointments${qs({ leadId: a.leadId })}`}>{fmtDateTime(a.scheduledAt)}</RecordLink></td>
-                    <td><Badge>{a.status}</Badge></td>
-                    <td className="text-soft">{a.revenue ? fmtMoney(a.revenue) : "—"}</td>
-                    <td>{a.revenue ? (a.collected ? <span className="font-medium text-good">Yes</span> : <span className="text-warn">Not yet</span>) : <span className="text-faint">—</span>}</td>
-                  </tr>))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>When</th><th>Status</th><th>Charged</th><th>Collected?</th></tr></thead>
+                  <tbody>{appointments.map((a) => (
+                    <tr key={a.id}>
+                      <td><RecordLink href={`/appointments${qs({ leadId: a.leadId })}`}>{fmtDateTime(a.scheduledAt)}</RecordLink></td>
+                      <td><Badge>{a.status}</Badge></td>
+                      <td className="text-soft">{a.revenue ? fmtMoney(a.revenue) : "—"}</td>
+                      <td>{a.revenue ? (a.collected ? <span className="font-medium text-good">Yes</span> : <span className="text-warn">Not yet</span>) : <span className="text-faint">—</span>}</td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           )}
 

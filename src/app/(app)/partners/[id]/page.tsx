@@ -104,17 +104,19 @@ export default async function PartnerDetail({ params, searchParams }: {
             {events.length === 0 ? (
               <p className="px-5 pb-4 text-sm text-faint">No events yet.</p>
             ) : (
-              <table className="tbl">
-                <thead><tr><th>Event</th><th>Date</th><th>Status</th><th>Screenings</th></tr></thead>
-                <tbody>{events.map((e) => (
-                  <tr key={e.id}>
-                    <td><RecordLink href={`/events/${e.id}`}>{e.name}</RecordLink></td>
-                    <td className="text-soft">{fmtDateTime(e.startsAt)}</td>
-                    <td><Badge>{e.status}</Badge></td>
-                    <td className="text-soft">{e.screeningsCompleted}</td>
-                  </tr>))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>Event</th><th>Date</th><th>Status</th><th>Screenings</th></tr></thead>
+                  <tbody>{events.map((e) => (
+                    <tr key={e.id}>
+                      <td><RecordLink href={`/events/${e.id}`}>{e.name}</RecordLink></td>
+                      <td className="text-soft">{fmtDateTime(e.startsAt)}</td>
+                      <td><Badge>{e.status}</Badge></td>
+                      <td className="text-soft">{e.screeningsCompleted}</td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </Card>
 

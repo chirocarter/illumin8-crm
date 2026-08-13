@@ -110,17 +110,19 @@ export default async function EventDetail({ params, searchParams }: {
             {leads.length === 0 ? (
               <p className="px-5 pb-4 text-sm text-faint">No leads captured yet.</p>
             ) : (
-              <table className="tbl">
-                <thead><tr><th>Name</th><th>Interest</th><th>Appt Status</th><th>Phone</th></tr></thead>
-                <tbody>{leads.map((l) => (
-                  <tr key={l.id}>
-                    <td><RecordLink href={`/leads/${l.id}`}>{l.firstName} {l.lastName}</RecordLink></td>
-                    <td><Badge>{l.interestLevel}</Badge></td>
-                    <td><Badge>{l.apptStatus}</Badge></td>
-                    <td className="text-soft">{l.phone ?? "—"}</td>
-                  </tr>))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead><tr><th>Name</th><th>Interest</th><th>Appt Status</th><th>Phone</th></tr></thead>
+                  <tbody>{leads.map((l) => (
+                    <tr key={l.id}>
+                      <td><RecordLink href={`/leads/${l.id}`}>{l.firstName} {l.lastName}</RecordLink></td>
+                      <td><Badge>{l.interestLevel}</Badge></td>
+                      <td><Badge>{l.apptStatus}</Badge></td>
+                      <td className="text-soft">{l.phone ?? "—"}</td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </Card>
 

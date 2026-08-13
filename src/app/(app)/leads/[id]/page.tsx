@@ -115,17 +115,19 @@ export default async function LeadDetail({ params, searchParams }: {
           {appointments.length === 0 ? (
             <p className="px-5 pb-4 text-sm text-faint">No appointments yet — book one when they&apos;re ready.</p>
           ) : (
-            <table className="tbl">
-              <thead><tr><th>When</th><th>Status</th><th>Charged</th><th>Collected?</th></tr></thead>
-              <tbody>{appointments.map((a) => (
-                <tr key={a.id}>
-                  <td><RecordLink href={`/appointments/${a.id}/edit`}>{fmtDateTime(a.scheduledAt)}</RecordLink></td>
-                  <td><Badge>{a.status}</Badge></td>
-                  <td className="text-soft">{a.revenue ? fmtMoney(a.revenue) : "—"}</td>
-                  <td>{a.revenue ? (a.collected ? <span className="font-medium text-good">Yes</span> : <span className="text-warn">Not yet</span>) : <span className="text-faint">—</span>}</td>
-                </tr>))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="tbl">
+                <thead><tr><th>When</th><th>Status</th><th>Charged</th><th>Collected?</th></tr></thead>
+                <tbody>{appointments.map((a) => (
+                  <tr key={a.id}>
+                    <td><RecordLink href={`/appointments/${a.id}/edit`}>{fmtDateTime(a.scheduledAt)}</RecordLink></td>
+                    <td><Badge>{a.status}</Badge></td>
+                    <td className="text-soft">{a.revenue ? fmtMoney(a.revenue) : "—"}</td>
+                    <td>{a.revenue ? (a.collected ? <span className="font-medium text-good">Yes</span> : <span className="text-warn">Not yet</span>) : <span className="text-faint">—</span>}</td>
+                  </tr>))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       </div>
