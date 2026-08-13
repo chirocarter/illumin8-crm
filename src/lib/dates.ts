@@ -24,33 +24,61 @@ export function nowISO(): string {
   return toISODateTime(new Date());
 }
 
-/** Monday of the week containing `d` (weeks run Mon–Sun). */
+// ===================== The reporting week =====================
+//
+// Weeks run FRIDAY → THURSDAY.
+//
+// Leadership pulls the weekly performance report on Friday morning covering
+// the period that closed the night before, so the week is anchored on Friday
+// rather than Monday. From inside a Mon–Sun head this reads as "last Friday
+// through this Thursday": on Mon Aug 10 the week is Fri Aug 7 – Thu Aug 13.
+//
+// Every "week" in the app — Command Center, calendar, spend, goals, all
+// reports — resolves through the helpers below, so the definition is stated
+// once here. Changing WEEK_START_DOW moves the whole app together.
+
+/** Day the week opens on: 0 = Sun, 1 = Mon … 5 = Fri. */
+export const WEEK_START_DOW = 5;
+
+/** Position of `d` within the reporting week: 0 = Friday … 6 = Thursday. */
+export function weekdayIndex(d: Date): number {
+  return (d.getDay() - WEEK_START_DOW + 7) % 7;
+}
+
+/** Short day labels in reporting-week order. */
+export const WEEK_DAY_LABELS = ["Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu"] as const;
+
+/** Friday opening the week containing `d`. */
 export function startOfWeek(d: Date = new Date()): Date {
   const out = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = out.getDay(); // 0 = Sun
-  const diff = day === 0 ? -6 : 1 - day;
-  out.setDate(out.getDate() + diff);
+  out.setDate(out.getDate() - weekdayIndex(out));
   return out;
 }
 
 export function endOfWeek(d: Date = new Date()): Date {
   const s = startOfWeek(d);
-  s.setDate(s.getDate() + 6); // Sunday — ranges are inclusive on both ends
+  s.setDate(s.getDate() + 6); // Thursday — ranges are inclusive on both ends
   return s;
 }
 
-/** [inclusive from, inclusive to] ISO date strings for the current Mon–Sun week. */
+/** [inclusive from, inclusive to] ISO dates for the Fri–Thu week containing today. */
 export function thisWeekRange(): { from: string; to: string } {
   return { from: toISODate(startOfWeek()), to: toISODate(endOfWeek()) };
 }
 
+/**
+ * The week before the one containing today — which is always the most recently
+ * COMPLETED week, on any day. On Thu Aug 13 (the current week's last day) it is
+ * Jul 31 – Aug 6; on Fri Aug 14 it becomes Aug 7 – Aug 13, the period the
+ * Friday report covers.
+ */
 export function lastWeekRange(): { from: string; to: string } {
   const d = new Date();
   d.setDate(d.getDate() - 7);
-  return { from: toISODate(startOfWeek(d)), to: toISODate(endOfWeek(d)) };
+  return weekRangeOf(d);
 }
 
-/** Mon–Sun (inclusive) week containing `d`. */
+/** Fri–Thu (inclusive) week containing `d`. */
 export function weekRangeOf(d: Date): { from: string; to: string } {
   return { from: toISODate(startOfWeek(d)), to: toISODate(endOfWeek(d)) };
 }

@@ -22,10 +22,17 @@ type Period = "week" | "month";
 /** Current + previous ranges and labels for the chosen period and offset. */
 function resolvePeriod(period: Period, offset: number) {
   if (period === "week") {
+    // Offset 0 is the last COMPLETED Fri–Thu week, not the one in progress.
+    // This report is pulled Friday morning for the period that closed the night
+    // before; landing on a week that is a few hours old would show an empty
+    // report and force a click backwards every single time. Offset +1 reaches
+    // the in-progress week, which is what the Command Center shows.
     const anchor = new Date();
-    anchor.setDate(anchor.getDate() + offset * 7);
+    anchor.setDate(anchor.getDate() + (offset - 1) * 7);
+    const prevAnchor = new Date(anchor);
+    prevAnchor.setDate(prevAnchor.getDate() - 7);
     const cur = weekRangeOf(anchor);
-    const prev = weekRangeOf(new Date(anchor.getTime() - 7 * 86400000));
+    const prev = weekRangeOf(prevAnchor);
     return { cur, prev, label: `Week of ${fmtDateLong(cur.from)}`, prevLabel: "last week", unit: "week" };
   }
   const now = new Date();
@@ -34,6 +41,14 @@ function resolvePeriod(period: Period, offset: number) {
   const prevAnchor = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
   const prev = monthRangeOf(prevAnchor);
   return { cur, prev, label: fmtMonth(cur.from), prevLabel: "last month", unit: "month" };
+}
+
+/** Whether the period being shown has finished, is running, or hasn't started. */
+function periodState(cur: { from: string; to: string }): "Completed" | "In progress" | "Upcoming" {
+  const today = todayISO();
+  if (cur.to < today) return "Completed";
+  if (cur.from > today) return "Upcoming";
+  return "In progress";
 }
 
 function Delta({ diff, invert = false }: { diff: number; invert?: boolean }) {
@@ -52,6 +67,9 @@ export default async function PerformanceReport({ searchParams }: { searchParams
   const period: Period = spStr(sp, "period") === "month" ? "month" : "week";
   const offset = Number(spStr(sp, "offset") ?? 0) || 0;
   const { cur, prev, label, prevLabel, unit } = resolvePeriod(period, offset);
+  const state = periodState(cur);
+  // Weekly can step forward into the week in progress; monthly stops at today's.
+  const maxOffset = period === "week" ? 1 : 0;
 
   // Whose performance: all cities, this city, or one person.
   const [user, scope, city, people] = await Promise.all([
@@ -173,8 +191,18 @@ export default async function PerformanceReport({ searchParams }: { searchParams
         <Link href={periodLink("month", 0)} className={period === "month" ? pillSm + " pill-active" : pillSm}>Monthly</Link>
         <span className="mx-1 h-4 w-px bg-line" />
         <Link href={periodLink(period, offset - 1)} className={pillSm}>← Previous</Link>
-        <Link href={periodLink(period, 0)} className={pillSm}>Current</Link>
-        {offset < 0 && <Link href={periodLink(period, offset + 1)} className={pillSm}>Next →</Link>}
+        {/* On the weekly view offset 0 is the week that just closed, so "Latest"
+            is the honest label — "Current" would promise the live one. */}
+        <Link href={periodLink(period, 0)} className={offset === 0 ? pillSm + " pill-active" : pillSm}>
+          {period === "week" ? "Latest closed week" : "Current"}
+        </Link>
+        {offset < maxOffset && <Link href={periodLink(period, offset + 1)} className={pillSm}>Next →</Link>}
+        <span className={`ml-1 rounded-full px-2.5 py-1 text-[0.7rem] font-medium ${
+          state === "Completed" ? "bg-good-soft text-good"
+            : state === "In progress" ? "bg-warn-soft text-accent-deep"
+            : "bg-info-soft text-info"}`}>
+          {state === "In progress" ? "In progress — partial week" : state}
+        </span>
       </div>
 
       {/* Print masthead — the PDF has to explain itself to someone who wasn't
@@ -184,7 +212,10 @@ export default async function PerformanceReport({ searchParams }: { searchParams
         <h1 className="mt-1 text-[1.6rem] font-semibold leading-tight tracking-tight">Community Outreach — Performance Report</h1>
         <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-1 text-[0.8rem] text-soft">
           <span><span className="text-faint">Scope:</span> <span className="font-medium text-ink">{scope.label}</span></span>
-          <span><span className="text-faint">Period:</span> <span className="font-medium text-ink">{label}</span> ({fmtDateLong(cur.from)} – {fmtDateLong(cur.to)})</span>
+          {/* Weeks run Fri–Thu. Spelled out because a reader who wasn't handed
+              this in person will otherwise assume Mon–Sun and misread it. */}
+          <span><span className="text-faint">Period:</span> <span className="font-medium text-ink">{label}</span> ({fmtDateLong(cur.from)} – {fmtDateLong(cur.to)}{period === "week" ? ", Fri–Thu" : ""})</span>
+          <span><span className="text-faint">Status:</span> <span className="font-medium text-ink">{state}</span></span>
           <span><span className="text-faint">Compared with:</span> {prevLabel}</span>
           <span><span className="text-faint">Generated:</span> {fmtDateLong(todayISO())}</span>
         </div>

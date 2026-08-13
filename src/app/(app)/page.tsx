@@ -65,7 +65,7 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
     spendFor(week.from, week.to, spendScope),
   ]);
 
-  // Per-day (Mon–Sun) mini-trends for the activity cards — same definitions
+  // Per-day (Fri–Thu) mini-trends for the activity cards — same definitions
   // as the metrics, bucketed by day. Decorative, but never a different story.
   const bucket = (rows: { occurredAt?: string; createdAt?: string }[], test: (r: any) => boolean) => {
     const days = new Array<number>(7).fill(0);
@@ -119,7 +119,9 @@ export default async function CommandCenter({ searchParams }: { searchParams: Pr
         <p className="text-sm font-medium text-accent-deep">{greeting}, {user.name}</p>
         <h1 className="mt-0.5 text-[1.85rem] font-semibold tracking-tight">Command Center</h1>
         <p className="mt-0.5 text-sm text-soft">
-          Week of {fmtDate(week.from)} · {scope.label} — every number opens its source records.
+          {/* The Fri–Thu span is spelled out: "Week of Fri, Aug 7" alone reads
+              as a Mon–Sun week to anyone who hasn't heard about the change. */}
+          {fmtDate(week.from)} – {fmtDate(week.to)} · {scope.label} — every number opens its source records.
         </p>
       </div>
 

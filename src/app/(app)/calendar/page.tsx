@@ -4,7 +4,7 @@ import { eq, gte, isNotNull, lt } from "drizzle-orm";
 import { PageHeader, Card, EmptyState, pillSm } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { cityWhere } from "@/lib/scope";
-import { fmtDate, todayISO, addDays } from "@/lib/dates";
+import { fmtDate, todayISO, addDays, weekdayIndex, WEEK_DAY_LABELS } from "@/lib/dates";
 import { MEETING_EVENT_TYPES } from "@/lib/taxonomy";
 import type { SP } from "@/lib/lists";
 import { spStr } from "@/lib/lists";
@@ -39,7 +39,9 @@ const KIND_LABEL: Record<Item["kind"], string> = {
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
   "August", "September", "October", "November", "December"];
-const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Fri-first, matching the reporting week — so a week column lines up with the
+// period the performance report covers.
+const DOW = WEEK_DAY_LABELS;
 
 function fmtTime(iso: string): string | null {
   if (iso.length <= 10) return null;
@@ -52,11 +54,9 @@ function fmtTime(iso: string): string | null {
   return m === 0 ? `${h} ${ampm}` : `${h}:${m < 10 ? "0" : ""}${m} ${ampm}`;
 }
 
-/** Monday-based start of the week containing `iso`. */
+/** Friday opening the reporting week containing `iso`. */
 function weekStart(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  const shift = (d.getDay() + 6) % 7;
-  return addDays(iso, -shift);
+  return addDays(iso, -weekdayIndex(new Date(iso + "T12:00:00")));
 }
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<SP> }) {
@@ -176,8 +176,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   const weekDays = view === "week" ? Array.from({ length: 7 }, (_, i) => addDays(first, i)) : [];
 
-  // Month grid scaffolding
-  const firstWeekday = (new Date(`${first}T12:00:00`).getDay() + 6) % 7;
+  // Month grid scaffolding — leading blanks up to the 1st's Fri-first column.
+  const firstWeekday = weekdayIndex(new Date(`${first}T12:00:00`));
   const daysInMonth = Number(last.slice(8));
   const cells: (number | null)[] = [
     ...Array.from({ length: firstWeekday }, () => null),
@@ -240,7 +240,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                 <Link href={`/calendar?v=day&d=${iso}`}
                   className="flex items-baseline justify-between gap-2 border-b border-hairline px-3 py-2 transition-colors hover:bg-hairline">
                   <span className={`text-xs font-semibold uppercase tracking-wider ${isToday ? "text-accent-deep" : "text-faint"}`}>
-                    {DOW[(new Date(iso + "T12:00:00").getDay() + 6) % 7]} {Number(iso.slice(8))}
+                    {DOW[weekdayIndex(new Date(iso + "T12:00:00"))]} {Number(iso.slice(8))}
                   </span>
                   {dayItems.length > 0 && <span className="text-[0.7rem] text-faint">{dayItems.length}</span>}
                 </Link>

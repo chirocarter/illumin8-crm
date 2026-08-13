@@ -2,7 +2,10 @@ import Link from "next/link";
 import { addDays, fmtDateLong, thisWeekRange } from "@/lib/dates";
 import { pillSm } from "./ui";
 
-/** Week navigation for reports: prev / this / next week + visible range. */
+/**
+ * Week navigation for reports: prev / this / next week + visible range.
+ * Weeks are Fri–Thu; the ± 7 day steps land on the same weekday either way.
+ */
 export default function RangeNav({ basePath, from, to }: { basePath: string; from: string; to: string }) {
   const thisWeek = thisWeekRange();
   const prev = { from: addDays(from, -7), to: addDays(to, -7) };
@@ -19,6 +22,7 @@ export default function RangeNav({ basePath, from, to }: { basePath: string; fro
       </Link>
       <Link href={link(next)} className={pillSm}>Next week →</Link>
       <span className="ml-2 text-sm text-soft">{fmtDateLong(from)} – {fmtDateLong(to)}</span>
+      <span className="text-xs text-faint">Fri–Thu</span>
     </div>
   );
 }
