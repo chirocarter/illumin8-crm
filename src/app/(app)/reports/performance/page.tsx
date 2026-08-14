@@ -17,10 +17,39 @@ import { spStr } from "@/lib/lists";
 export const metadata = { title: "Performance Report" };
 export const dynamic = "force-dynamic";
 
-type Period = "week" | "month";
+type Period = "week" | "month" | "custom";
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * An explicit from/to pair, if the URL carries a usable one.
+ *
+ * Reversed dates are swapped rather than rejected — picking the end first is an
+ * easy slip and silently showing an empty report would look like a data problem
+ * rather than a typo.
+ */
+function customRange(sp: SP): { from: string; to: string } | null {
+  const from = spStr(sp, "from");
+  const to = spStr(sp, "to");
+  if (!from || !to || !ISO_DATE.test(from) || !ISO_DATE.test(to)) return null;
+  return from <= to ? { from, to } : { from: to, to: from };
+}
 
 /** Current + previous ranges and labels for the chosen period and offset. */
-function resolvePeriod(period: Period, offset: number) {
+function resolvePeriod(period: Period, offset: number, custom: { from: string; to: string } | null) {
+  if (period === "custom" && custom) {
+    // Compare against the window of the same length immediately before it, so
+    // "vs previous period" means something whatever length you picked.
+    const days = daysBetween(custom.from, custom.to) + 1;
+    const prev = { from: addDays(custom.from, -days), to: addDays(custom.from, -1) };
+    return {
+      cur: custom,
+      prev,
+      label: `${fmtDateLong(custom.from)} – ${fmtDateLong(custom.to)}`,
+      prevLabel: `previous ${days} day${days === 1 ? "" : "s"}`,
+      unit: "period",
+    };
+  }
   if (period === "week") {
     // Offset 0 is the last COMPLETED Fri–Thu week, not the one in progress.
     // This report is pulled Friday morning for the period that closed the night
@@ -64,12 +93,18 @@ function Delta({ diff, invert = false }: { diff: number; invert?: boolean }) {
 
 export default async function PerformanceReport({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const period: Period = spStr(sp, "period") === "month" ? "month" : "week";
+  const custom = customRange(sp);
+  const asked = spStr(sp, "period");
+  // A usable from/to pair wins: it can only get into the URL deliberately, and
+  // honouring `period` over it would silently ignore the dates you just picked.
+  const period: Period = custom ? "custom" : asked === "month" ? "month" : "week";
   const offset = Number(spStr(sp, "offset") ?? 0) || 0;
-  const { cur, prev, label, prevLabel, unit } = resolvePeriod(period, offset);
+  const { cur, prev, label, prevLabel, unit } = resolvePeriod(period, offset, custom);
   const state = periodState(cur);
   // Weekly can step forward into the week in progress; monthly stops at today's.
   const maxOffset = period === "week" ? 1 : 0;
+  // Stepping a custom range moves it by its own length, keeping the window size.
+  const curDays = daysBetween(cur.from, cur.to) + 1;
 
   // Whose performance: all cities, this city, or one person.
   const [user, scope, city, people] = await Promise.all([
@@ -121,7 +156,17 @@ export default async function PerformanceReport({ searchParams }: { searchParams
   const money = (v: number) => "$" + Math.round(v).toLocaleString("en-US");
 
   // Goal pace: weekly targets scaled to the period length (a month ≈ 4.3 weeks).
-  const weeksInPeriod = Math.max(1, Math.round((daysBetween(cur.from, cur.to) + 1) / 7));
+  //
+  // Week and month keep the whole-number scaling they have always used, so the
+  // targets on those reports don't move under anyone mid-conversation. A custom
+  // range can be any length, and rounding 10 days up to 2 whole weeks would set
+  // a target 40% too high — so it scales by the exact days instead.
+  const weeksInPeriod = period === "custom"
+    ? curDays / 7
+    : Math.max(1, Math.round((daysBetween(cur.from, cur.to) + 1) / 7));
+  const paceLabel = period === "custom"
+    ? ` (weekly targets × ${weeksInPeriod.toFixed(2).replace(/\.?0+$/, "")})`
+    : weeksInPeriod > 1 ? ` (weekly targets × ${weeksInPeriod})` : "";
 
   const activityRows = [
     "businesses_added", "businesses_contacted", "in_person_visits", "phone_calls",
@@ -147,8 +192,14 @@ export default async function PerformanceReport({ searchParams }: { searchParams
     { label: "Collected / charged", value: charged > 0 ? `${Math.round((collected / charged) * 100)}%` : "—", href: m.money_collected.href },
   ];
 
+  // from/to are omitted for week and month so switching back off a custom range
+  // doesn't drag the old dates along and pin the report to them forever.
   const periodLink = (p: Period, o: number) =>
     `/reports/performance${qs({ period: p, offset: o || undefined, ...link })}`;
+  const customLink = (r: { from: string; to: string }) =>
+    `/reports/performance${qs({ from: r.from, to: r.to, ...link })}`;
+  const shifted = (dir: -1 | 1) =>
+    customLink({ from: addDays(cur.from, dir * curDays), to: addDays(cur.to, dir * curDays) });
 
   const metricTable = (title: string, keys: string[]) => (
     <Card className="print-keep">
@@ -188,24 +239,62 @@ export default async function PerformanceReport({ searchParams }: { searchParams
       </div>
 
       {/* Controls (hidden on print) */}
-      <div className="mb-5 flex flex-wrap items-center gap-2 print:hidden">
+      <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
         <Link href={periodLink("week", 0)} className={period === "week" ? pillSm + " pill-active" : pillSm}>Weekly</Link>
         <Link href={periodLink("month", 0)} className={period === "month" ? pillSm + " pill-active" : pillSm}>Monthly</Link>
+        {/* Anchored on the range already on screen, so "Custom" opens showing
+            the period you were just looking at rather than an empty form. */}
+        <Link href={customLink(cur)} className={period === "custom" ? pillSm + " pill-active" : pillSm}>Custom</Link>
         <span className="mx-1 h-4 w-px bg-line" />
-        <Link href={periodLink(period, offset - 1)} className={pillSm}>← Previous</Link>
-        {/* On the weekly view offset 0 is the week that just closed, so "Latest"
-            is the honest label — "Current" would promise the live one. */}
-        <Link href={periodLink(period, 0)} className={offset === 0 ? pillSm + " pill-active" : pillSm}>
-          {period === "week" ? "Latest closed week" : "Current"}
-        </Link>
-        {offset < maxOffset && <Link href={periodLink(period, offset + 1)} className={pillSm}>Next →</Link>}
+        {period === "custom" ? (
+          <>
+            <Link href={shifted(-1)} className={pillSm}>← Previous {curDays}d</Link>
+            <Link href={periodLink("week", 0)} className={pillSm}>Back to weekly</Link>
+            <Link href={shifted(1)} className={pillSm}>Next {curDays}d →</Link>
+          </>
+        ) : (
+          <>
+            <Link href={periodLink(period, offset - 1)} className={pillSm}>← Previous</Link>
+            {/* On the weekly view offset 0 is the week that just closed, so "Latest"
+                is the honest label — "Current" would promise the live one. */}
+            <Link href={periodLink(period, 0)} className={offset === 0 ? pillSm + " pill-active" : pillSm}>
+              {period === "week" ? "Latest closed week" : "Current"}
+            </Link>
+            {offset < maxOffset && <Link href={periodLink(period, offset + 1)} className={pillSm}>Next →</Link>}
+          </>
+        )}
         <span className={`ml-1 rounded-full px-2.5 py-1 text-[0.7rem] font-medium ${
           state === "Completed" ? "bg-good-soft text-good"
             : state === "In progress" ? "bg-warn-soft text-accent-deep"
             : "bg-info-soft text-info"}`}>
-          {state === "In progress" ? "In progress — partial week" : state}
+          {state === "In progress" ? `In progress — partial ${unit}` : state}
         </span>
       </div>
+
+      {/* Date pickers. A plain GET form: no client JS, and the resulting URL is
+          shareable and printable exactly as it appears. Hidden scope fields keep
+          "All cities" or a person selected when the dates change. */}
+      {period === "custom" && (
+        <form method="get" action="/reports/performance"
+          className="mb-5 flex flex-wrap items-end gap-3 rounded-card bg-card p-4 shadow-card print:hidden">
+          {Object.entries(link).map(([k, v]) =>
+            v === undefined ? null : <input key={k} type="hidden" name={k} value={v} />)}
+          <label className="block">
+            <span className="mb-1 block text-[0.7rem] font-medium uppercase tracking-wider text-faint">From</span>
+            <input type="date" name="from" defaultValue={cur.from} required
+              className="rounded-xl border border-line bg-canvas px-3 py-2 text-sm" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[0.7rem] font-medium uppercase tracking-wider text-faint">To</span>
+            <input type="date" name="to" defaultValue={cur.to} required
+              className="rounded-xl border border-line bg-canvas px-3 py-2 text-sm" />
+          </label>
+          <button type="submit" className={pillSm + " pill-active"}>Apply</button>
+          <span className="text-xs text-faint">
+            {curDays} day{curDays === 1 ? "" : "s"} · compared with the {curDays} before it
+          </span>
+        </form>
+      )}
 
       {/* Print masthead — the PDF has to explain itself to someone who wasn't
           the one who generated it: who, what period, and when it was run. */}
@@ -216,7 +305,7 @@ export default async function PerformanceReport({ searchParams }: { searchParams
           <span><span className="text-faint">Scope:</span> <span className="font-medium text-ink">{scope.label}</span></span>
           {/* Weeks run Fri–Thu. Spelled out because a reader who wasn't handed
               this in person will otherwise assume Mon–Sun and misread it. */}
-          <span><span className="text-faint">Period:</span> <span className="font-medium text-ink">{label}</span> ({fmtDateLong(cur.from)} – {fmtDateLong(cur.to)}{period === "week" ? ", Fri–Thu" : ""})</span>
+          <span><span className="text-faint">Period:</span> <span className="font-medium text-ink">{label}</span> ({fmtDateLong(cur.from)} – {fmtDateLong(cur.to)}{period === "week" ? ", Fri–Thu" : period === "custom" ? `, custom ${curDays}-day range` : ""})</span>
           <span><span className="text-faint">Status:</span> <span className="font-medium text-ink">{state}</span></span>
           <span><span className="text-faint">Compared with:</span> {prevLabel}</span>
           <span><span className="text-faint">Generated:</span> {fmtDateLong(todayISO())}</span>
@@ -391,7 +480,7 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
       {/* Goal pace */}
       <Card className="mt-5 print-keep">
-        <CardHeader title={`Goal Pace${weeksInPeriod > 1 ? ` (weekly targets × ${weeksInPeriod})` : ""}`} />
+        <CardHeader title={`Goal Pace${paceLabel}`} />
         <div className="overflow-x-auto">
           <table className="tbl">
             <thead><tr>
@@ -401,13 +490,15 @@ export default async function PerformanceReport({ searchParams }: { searchParams
               {goals.map((g) => {
                 const metric = m[g.metric];
                 if (!metric) return null;
+                // A custom range scales fractionally, so the percentage uses the
+                // exact target while the column shows a whole number to aim at.
                 const target = g.weeklyTarget * weeksInPeriod;
                 const pct = target > 0 ? Math.round((metric.value / target) * 100) : 0;
                 return (
                   <tr key={g.id}>
                     <td className="text-soft">{g.label}</td>
                     <td className="text-right"><DrillNumber value={metric.value} href={metric.href} /></td>
-                    <td className="text-right text-soft">{target}</td>
+                    <td className="text-right text-soft">{Math.round(target)}</td>
                     <td className="text-right">
                       <span className={`font-medium ${pct >= 100 ? "text-good" : pct >= 60 ? "text-accent-deep" : "text-soft"}`}>{pct}%</span>
                     </td>
@@ -423,6 +514,9 @@ export default async function PerformanceReport({ searchParams }: { searchParams
         <span className="hidden font-medium text-soft print:inline">How these numbers are defined — </span>
         Definitions match the Command Center and weekly reports — one source of truth. “Booked” counts appointments created in
         the period; “charged” and “collected” sum their amounts. Goal targets are the weekly goals from Settings, scaled to the period length.
+        {period === "custom"
+          ? ` This is a custom ${curDays}-day range compared with the ${curDays} days immediately before it.`
+          : " Weeks run Friday through Thursday."}
       </p>
 
       {/* Signature line — these reports go to leadership, so the paper copy
