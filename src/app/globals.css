@@ -199,21 +199,24 @@ body {
   outline-offset: 2px;
 }
 
-/* Grid and flex children default to min-width:auto, which means they refuse to
-   shrink below their own content. One wide table or one long unbroken name then
-   widens its column past the screen, and the whole PAGE scrolls sideways on a
-   phone rather than the table scrolling inside its own box.
+/* GRID children only. They default to min-width:auto, which means they refuse
+   to shrink below their own content: one wide table then widens its column past
+   the screen and the whole PAGE scrolls sideways on a phone, instead of the
+   table scrolling inside its own box.
 
-   This has bitten the spend page and every report, so it is fixed here for the
-   whole app instead of one min-w-0 at a time.
+   Deliberately NOT flex children. That was tried and reverted - the mobile nav
+   is a flex row of pills that scrolls sideways, and a pill is meant to keep its
+   natural width and overflow the strip. Letting them shrink crushed every one
+   to 30px: unreadable circles with the label clipped. A flex item that really
+   must shrink says so with min-w-0 at the call site, the way Card does.
 
    It MUST stay inside @layer base. Unlayered CSS beats every layered rule no
    matter how specific, so out here it would silently swallow any future
-   min-w-* utility on a grid or flex child — the same trap the unlayered
+   min-w-* utility on a grid child — the same trap the unlayered
    scrollbar-width rule set for the .no-scrollbar utilities. In the base layer
    Tailwind's utilities come later and win, which is what you want. */
 @layer base {
-  :where(.grid, .flex) > :where(*) {
+  :where(.grid) > :where(*) {
     min-width: 0;
   }
 }
