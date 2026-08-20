@@ -26,6 +26,10 @@ const STATUS_TONE: Record<string, Tone> = {
   // Leads / appointments
   "Not Contacted": "gray", Showed: "green", "No-Show": "red", Rescheduled: "amber",
   "Not Interested": "red", "Awaiting Reply": "gray", "Good Conversation": "green",
+  // Activity outcomes. Green is reserved for a real step forward: a meeting or
+  // event on the calendar, or finally getting past the gatekeeper to the person
+  // who can say yes. The rest stay neutral so the wins are what catch the eye.
+  "Booked Meeting": "green", "Booked Event": "green", "Reached Decision Maker": "green",
   // Partners / campaigns / tasks / projects
   Prospective: "gray", Active: "green", Paused: "amber", Ended: "red",
   Draft: "gray", Open: "blue", "On Hold": "amber", Archived: "gray",
