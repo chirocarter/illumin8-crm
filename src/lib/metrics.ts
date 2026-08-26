@@ -5,7 +5,7 @@ import { db, schema as s } from "@/db";
 import { and, count, countDistinct, eq, gte, inArray, isNotNull, lt, notInArray, sql, sum, type SQL } from "drizzle-orm";
 import {
   CONTACT_ACTIVITY_TYPES, IN_PERSON_ACTIVITY_TYPES, PARTNERSHIP_CONVO_OUTCOMES,
-  OPEN_STAGES, NON_OUTREACH_EVENT_TYPES, MEETING_EVENT_TYPES,
+  OPEN_STAGES, NON_OUTREACH_EVENT_TYPES, MEETING_EVENT_TYPES, REPORTING_CALL_TYPES,
 } from "./taxonomy";
 import { followUpCondition } from "./followups";
 import { todayISO } from "./dates";
@@ -79,7 +79,7 @@ export async function metricValues(
     phoneCalls, emails, followUps, partnershipConvos, dropBoxVisits,
     eventsBooked, meetingsBooked, meetingsAttended, partnershipsConfirmed,
     eventsHeld, screenings, apptsBooked, apptsShowed, noShows, charged, collected,
-    hoursWorked, labourCost, directSpend,
+    hoursWorked, labourCost, directSpend, reportingCalls,
   ] = await Promise.all([
     one(db.select({ c: count() }).from(s.accounts).where(and(gte(s.accounts.createdAt, from), lt(s.accounts.createdAt, upper(to)), ...inScope(s.accounts)))),
     one(db.select({ c: count() }).from(s.leads).where(and(gte(s.leads.createdAt, from), lt(s.leads.createdAt, upper(to)), ...inScope(s.leads)))),
@@ -119,6 +119,10 @@ export async function metricValues(
       .where(and(gte(s.timeEntries.workedOn, from), lt(s.timeEntries.workedOn, upper(to)), ...inScope(s.timeEntries)))),
     one(db.select({ c: sum(s.expenses.amount) }).from(s.expenses)
       .where(and(gte(s.expenses.spentOn, from), lt(s.expenses.spentOn, upper(to)), ...inScope(s.expenses)))),
+
+    // Calls For Reporting Purpose — drop-ins + phone calls + meetings + events
+    // as one number. Activities only; see REPORTING_CALL_TYPES for why.
+    one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.type, [...REPORTING_CALL_TYPES])))),
   ]);
 
   // Spend is labour plus money out the door.
@@ -140,6 +144,7 @@ export async function metricValues(
     m("follow_ups_completed", "Follow-Ups Completed", followUps, `/activities${qs({ ...range, followups: "1" })}`),
     m("partnership_conversations", "Partnership Conversations", partnershipConvos, `/activities${qs({ ...range, outcomeGroup: "partnership" })}`),
     m("drop_box_visits", "Drop Box Visits", dropBoxVisits, `/activities${qs({ ...range, type: "Drop Box Visit" })}`),
+    m("calls_for_reporting", "Calls For Reporting Purpose", reportingCalls, `/activities${qs({ ...range, typeGroup: "reportingcalls" })}`),
     m("events_booked", "Events Booked", eventsBooked, `/events${qs({ bookedFrom: from, bookedTo: to, ...linkParams })}`),
     m("meetings_booked", "Meetings Booked", meetingsBooked, `/events${qs({ bookedFrom: from, bookedTo: to, meetings: "1", ...linkParams })}`),
     m("meetings_attended", "Meetings Attended", meetingsAttended, `/events${qs({ heldFrom: from, heldTo: to, meetings: "1", ...linkParams })}`),

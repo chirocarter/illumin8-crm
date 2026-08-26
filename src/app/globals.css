@@ -310,6 +310,17 @@ body {
     border-radius: 4px;
     break-inside: avoid;
   }
+  /* The headline callout keeps its emphasis on paper. The rule above flattens
+     every card to a hairline, which would bury the one number the report is
+     pulled for. Amber does not survive greyscale printing, so the weight comes
+     from a heavier rule and a tinted ground rather than colour alone. */
+  .print-callout {
+    border: 2px solid var(--color-ink) !important;
+    background: #f4f4f6 !important;
+    border-radius: 4px;
+    break-inside: avoid;
+  }
+
   /* Gradient rings and glows are screen affordances; on paper they smear. */
   .pill-active, .btn-glow { background: none !important; border-color: var(--color-line) !important; }
 

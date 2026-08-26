@@ -5,7 +5,7 @@ import { PageHeader, Card, CardHeader, DrillNumber, pillSm } from "@/components/
 import PrintButton from "@/components/PrintButton";
 import ScopeToggle from "@/components/ScopeToggle";
 import { metricValues, qs } from "@/lib/metrics";
-import { OPEN_STAGES } from "@/lib/taxonomy";
+import { OPEN_STAGES, REPORTING_CALL_TYPES, OUTREACH_EVENT_ACTIVITY_TYPES } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/auth";
 import { activeCity, resolveScope, scopeConds, selectableUsers } from "@/lib/scope";
 import {
@@ -140,6 +140,32 @@ export default async function PerformanceReport({ searchParams }: { searchParams
       ...scopeConds(s.appointments, scope),
     ))
     .groupBy(s.appointments.locationId, s.locations.name);
+
+  // Composition of Calls For Reporting Purpose. The headline is a single
+  // number, but an admin reading the PDF should be able to see what is inside
+  // it without asking, so the four parts are shown alongside and must sum to it.
+  const callParts = await db
+    .select({ type: s.activities.type, n: count() })
+    .from(s.activities)
+    .where(and(
+      gte(s.activities.occurredAt, cur.from),
+      lt(s.activities.occurredAt, cur.to + "T99"),
+      eq(s.activities.systemGenerated, false),
+      inArray(s.activities.type, [...REPORTING_CALL_TYPES]),
+      ...scopeConds(s.activities, scope),
+    ))
+    .groupBy(s.activities.type);
+  const partOf = (types: string[]) =>
+    callParts.filter((r) => types.includes(r.type)).reduce((t, r) => t + Number(r.n), 0);
+  // Each part carries the query that reproduces its OWN number. Two of these
+  // span more than one activity type, so a single `type=` filter would open a
+  // list that disagrees with the figure above it.
+  const callBreakdown = [
+    { label: "Drop-Ins", value: partOf(["In-Person Visit"]), query: { type: "In-Person Visit" } },
+    { label: "Phone Calls", value: partOf(["Phone Call", "Voicemail"]), query: { typeGroup: "phone" } },
+    { label: "Meetings", value: partOf(["Meeting"]), query: { type: "Meeting" } },
+    { label: "Events", value: partOf([...OUTREACH_EVENT_ACTIVITY_TYPES]), query: { typeGroup: "outreachevents" } },
+  ];
 
   const staleCutoff = addDays(todayISO(), -14);
   const [m, mPrev, mMtd, openOpps, staleOpps, goals] = await Promise.all([
@@ -311,6 +337,41 @@ export default async function PerformanceReport({ searchParams }: { searchParams
           <span><span className="text-faint">Generated:</span> {fmtDateLong(todayISO())}</span>
         </div>
       </div>
+
+      {/* Calls For Reporting Purpose — the headline leadership asks for, so it
+          leads the report on screen and on paper. print-keep stops it splitting
+          across a page break, which would strand the total from its parts. */}
+      <Card className="mb-5 print-keep print-callout border-2 border-accent/40 p-5">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-accent-deep">
+              Calls For Reporting Purpose
+            </p>
+            <Link href={m.calls_for_reporting.href}
+              className="mt-1 block text-[2.75rem] font-semibold leading-none tracking-tight text-ink transition-colors hover:text-accent-deep">
+              {m.calls_for_reporting.value}
+            </Link>
+            <p className="mt-2 text-xs text-soft">
+              <Delta diff={delta("calls_for_reporting")} /> <span className="text-faint">vs {prevLabel}</span>
+            </p>
+          </div>
+
+          {/* The four parts, each drilling into its own records. They sum to the
+              headline, so the number can be checked rather than taken on faith. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
+            {callBreakdown.map((part, i) => (
+              <div key={part.label} className="flex items-center gap-2">
+                {i > 0 && <span className="text-lg font-light text-faint">+</span>}
+                <Link href={`/activities${qs({ from: cur.from, to: cur.to, ...part.query, ...link })}`}
+                  className="rounded-xl bg-well px-3 py-2 text-center transition-colors hover:bg-hairline">
+                  <span className="block text-lg font-semibold leading-none">{part.value}</span>
+                  <span className="mt-1 block text-[0.65rem] font-medium uppercase tracking-wider text-faint">{part.label}</span>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
 
       {/* Headline money */}
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -512,6 +573,9 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
       <p className="mt-4 text-xs text-faint print:mt-5 print:border-t print:border-line print:pt-3">
         <span className="hidden font-medium text-soft print:inline">How these numbers are defined — </span>
+        <strong className="font-medium text-soft">Calls For Reporting Purpose</strong> = drop-ins + phone calls + meetings + events,
+        counted from logged activities (In-Person Visit, Phone Call, Meeting, Screening Event, Lunch and Learn).
+        Counted once each — an event is not also counted from the events calendar.
         Definitions match the Command Center and weekly reports — one source of truth. “Booked” counts appointments created in
         the period; “charged” and “collected” sum their amounts. Goal targets are the weekly goals from Settings, scaled to the period length.
         {period === "custom"
