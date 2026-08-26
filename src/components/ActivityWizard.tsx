@@ -209,14 +209,15 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
    * something to pick, since an unscheduled meeting shouldn't cost a screen.
    * Takes the id directly because the state setter hasn't flushed yet.
    */
-  const afterBusiness = (acctId: number | null = accountId): Phase => {
-    if (flowFor(type) === "results") return "pickevent";
+  const afterBusiness = (acctId: number | null = accountId, t: string | null = type): Phase => {
+    if (flowFor(t) === "results") return "pickevent";
     const hasScheduledMeeting = acctId !== null && events.some((e) =>
       e.accountId === acctId &&
       ["Booked", "Confirmed", "Date Pending", "Planning"].includes(e.status) &&
       (MEETING_EVENT_TYPES as readonly string[]).includes(e.type));
-    if (type === "Meeting" && hasScheduledMeeting) return "pickevent";
-    return flow === "touch" || flow === "note" ? "contact" : afterWho();
+    if (t === "Meeting" && hasScheduledMeeting) return "pickevent";
+    const f = flowFor(t);
+    return f === "touch" || f === "note" ? "contact" : afterWho(t);
   };
 
   /** After picking which scheduled thing this reports on. */
@@ -485,9 +486,14 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
                 onClick={() => {
                   if (t !== type) resetBranchState(); // switching type invalidates earlier answers
                   setType(t);
-                  // launched from a record — the who/where is already known
-                  if (prefill.accountId || prefill.leadId || prefill.projectId) {
+                  // Launched from a record. A lead IS the person and a project has
+                  // no person, so those skip ahead. A business is NOT a person —
+                  // jumping past "who did you talk to?" was losing that every time
+                  // an activity was logged from an account page.
+                  if (prefill.leadId || prefill.projectId) {
                     go(afterWho(t));
+                  } else if (prefill.accountId) {
+                    go(afterBusiness(prefill.accountId, t));
                   } else {
                     go("business");
                   }
@@ -598,7 +604,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
               </button>
               <button className={skipBtn}
                 onClick={() => { setContactId(null); setNewContact(null); go(afterWho()); }}>
-                Someone else / skip
+                No one / main line
               </button>
             </>
           ) : (

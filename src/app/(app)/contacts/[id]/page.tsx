@@ -8,6 +8,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, EmptyState } from "@/components/ui";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/dates";
 import { qs } from "@/lib/metrics";
+import { formatPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,18 @@ export default async function ContactDetail({ params, searchParams }: {
     ["Business", account ? <RecordLink key="a" href={`/accounts/${account.id}`}>{account.name}</RecordLink> : "—"],
     ["Title", contact.title ?? "—"],
     ["Type", contact.contactType],
-    ["Phone", contact.phone ?? "—"],
+    // A contact with no direct number falls back to the business main line, so
+    // there is always something to dial. Labelled, because showing the business
+    // number bare would read as this person's cell and get saved as one.
+    ["Phone", contact.phone ? formatPhone(contact.phone)
+      : account?.phone ? (
+        <span key="phone">
+          {formatPhone(account.phone)}
+          <span className="mt-0.5 block text-xs font-normal text-faint">
+            Main line at <RecordLink href={`/accounts/${account.id}`} muted>{account.name}</RecordLink> — no direct number on file
+          </span>
+        </span>
+      ) : "—"],
     ["Email", contact.email ?? "—"],
     ["Prefers", contact.preferredMethod ?? "—"],
     ["Influence", contact.influenceLevel],
