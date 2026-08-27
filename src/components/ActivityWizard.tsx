@@ -490,7 +490,9 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
                   // no person, so those skip ahead. A business is NOT a person —
                   // jumping past "who did you talk to?" was losing that every time
                   // an activity was logged from an account page.
-                  if (prefill.leadId || prefill.projectId) {
+                  // prefill.contactId means the person is already known (launched
+                  // from a contact page), so asking again is a wasted screen.
+                  if (prefill.leadId || prefill.projectId || prefill.contactId) {
                     go(afterWho(t));
                   } else if (prefill.accountId) {
                     go(afterBusiness(prefill.accountId, t));
