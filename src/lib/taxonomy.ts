@@ -73,12 +73,6 @@ export const COMMUNICATION_TYPES = [
 // "Calls For Reporting Purpose" — the headline touchpoint count leadership asks
 // for: phone calls + drop-ins.
 //
-// Meetings and events used to count here too. They were removed deliberately:
-// attending a meeting or running a screening is a different kind of work, is
-// already reported under Meetings Attended and Events Held, and lumping them in
-// inflated a number meant to measure outbound reach. Do not add them back
-// without asking — this is a reporting definition, not an oversight.
-//
 // Counted from ACTIVITIES. Voicemail rides with Phone Call to match the
 // existing Phone Calls metric. Drop Box Visit stays out: servicing a box is not
 // a drop-in, and it already has its own goal line.
