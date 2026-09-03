@@ -5,7 +5,7 @@ import { PageHeader, Card, CardHeader, DrillNumber, pillSm } from "@/components/
 import PrintButton from "@/components/PrintButton";
 import ScopeToggle from "@/components/ScopeToggle";
 import { metricValues, qs } from "@/lib/metrics";
-import { OPEN_STAGES, REPORTING_CALL_TYPES, OUTREACH_EVENT_ACTIVITY_TYPES } from "@/lib/taxonomy";
+import { OPEN_STAGES, REPORTING_CALL_TYPES } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/auth";
 import { activeCity, resolveScope, scopeConds, selectableUsers } from "@/lib/scope";
 import {
@@ -143,7 +143,7 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
   // Composition of Calls For Reporting Purpose. The headline is a single
   // number, but an admin reading the PDF should be able to see what is inside
-  // it without asking, so the four parts are shown alongside and must sum to it.
+  // it without asking, so the parts are shown alongside and must sum to it.
   const callParts = await db
     .select({ type: s.activities.type, n: count() })
     .from(s.activities)
@@ -157,14 +157,12 @@ export default async function PerformanceReport({ searchParams }: { searchParams
     .groupBy(s.activities.type);
   const partOf = (types: string[]) =>
     callParts.filter((r) => types.includes(r.type)).reduce((t, r) => t + Number(r.n), 0);
-  // Each part carries the query that reproduces its OWN number. Two of these
-  // span more than one activity type, so a single `type=` filter would open a
-  // list that disagrees with the figure above it.
+  // Each part carries the query that reproduces its OWN number. Phone Calls
+  // spans two activity types (Voicemail rides with it), so a single `type=`
+  // filter would open a list that disagrees with the figure above it.
   const callBreakdown = [
-    { label: "Drop-Ins", value: partOf(["In-Person Visit"]), query: { type: "In-Person Visit" } },
     { label: "Phone Calls", value: partOf(["Phone Call", "Voicemail"]), query: { typeGroup: "phone" } },
-    { label: "Meetings", value: partOf(["Meeting"]), query: { type: "Meeting" } },
-    { label: "Events", value: partOf([...OUTREACH_EVENT_ACTIVITY_TYPES]), query: { typeGroup: "outreachevents" } },
+    { label: "Drop-Ins", value: partOf(["In-Person Visit"]), query: { type: "In-Person Visit" } },
   ];
 
   const staleCutoff = addDays(todayISO(), -14);
@@ -573,9 +571,9 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
       <p className="mt-4 text-xs text-faint print:mt-5 print:border-t print:border-line print:pt-3">
         <span className="hidden font-medium text-soft print:inline">How these numbers are defined — </span>
-        <strong className="font-medium text-soft">Calls For Reporting Purpose</strong> = drop-ins + phone calls + meetings + events,
-        counted from logged activities (In-Person Visit, Phone Call, Meeting, Screening Event, Lunch and Learn).
-        Counted once each — an event is not also counted from the events calendar.
+        <strong className="font-medium text-soft">Calls For Reporting Purpose</strong> = phone calls + drop-ins, counted from
+        logged activities (Phone Call, Voicemail, In-Person Visit). Meetings attended and events held are NOT included —
+        they are reported separately below.
         Definitions match the Command Center and weekly reports — one source of truth. “Booked” counts appointments created in
         the period; “charged” and “collected” sum their amounts. Goal targets are the weekly goals from Settings, scaled to the period length.
         {period === "custom"
