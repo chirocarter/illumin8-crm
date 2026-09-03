@@ -74,11 +74,15 @@ export const COMMUNICATION_TYPES = [
 // for: phone calls + drop-ins.
 //
 // Counted from ACTIVITIES. Voicemail rides with Phone Call to match the
-// existing Phone Calls metric. Drop Box Visit stays out: servicing a box is not
-// a drop-in, and it already has its own goal line.
+// existing Phone Calls metric, and servicing a drop box counts as a drop-in —
+// it is still a visit to the business. Drop Box Visits also keep their own goal
+// line, which is a separate figure and not double counting.
 export const REPORTING_CALL_TYPES = [
-  "In-Person Visit", "Phone Call", "Voicemail",
+  "In-Person Visit", "Drop Box Visit", "Phone Call", "Voicemail",
 ] as const;
+
+/** The drop-in half of the reporting-calls number: visits made in person. */
+export const DROP_IN_ACTIVITY_TYPES = ["In-Person Visit", "Drop Box Visit"] as const;
 
 export const IN_PERSON_ACTIVITY_TYPES = [
   "In-Person Visit", "Drop Box Visit", "Meeting", "Lunch and Learn",

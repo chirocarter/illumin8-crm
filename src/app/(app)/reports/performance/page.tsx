@@ -5,7 +5,7 @@ import { PageHeader, Card, CardHeader, DrillNumber, pillSm } from "@/components/
 import PrintButton from "@/components/PrintButton";
 import ScopeToggle from "@/components/ScopeToggle";
 import { metricValues, qs } from "@/lib/metrics";
-import { OPEN_STAGES, REPORTING_CALL_TYPES } from "@/lib/taxonomy";
+import { OPEN_STAGES, REPORTING_CALL_TYPES, DROP_IN_ACTIVITY_TYPES } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/auth";
 import { activeCity, resolveScope, scopeConds, selectableUsers } from "@/lib/scope";
 import {
@@ -157,12 +157,12 @@ export default async function PerformanceReport({ searchParams }: { searchParams
     .groupBy(s.activities.type);
   const partOf = (types: string[]) =>
     callParts.filter((r) => types.includes(r.type)).reduce((t, r) => t + Number(r.n), 0);
-  // Each part carries the query that reproduces its OWN number. Phone Calls
-  // spans two activity types (Voicemail rides with it), so a single `type=`
-  // filter would open a list that disagrees with the figure above it.
+  // Each part carries the query that reproduces its OWN number. Both span two
+  // activity types, so a single `type=` filter would open a list that
+  // disagrees with the figure above it.
   const callBreakdown = [
     { label: "Phone Calls", value: partOf(["Phone Call", "Voicemail"]), query: { typeGroup: "phone" } },
-    { label: "Drop-Ins", value: partOf(["In-Person Visit"]), query: { type: "In-Person Visit" } },
+    { label: "Drop-Ins", value: partOf([...DROP_IN_ACTIVITY_TYPES]), query: { typeGroup: "dropins" } },
   ];
 
   const staleCutoff = addDays(todayISO(), -14);
@@ -572,7 +572,7 @@ export default async function PerformanceReport({ searchParams }: { searchParams
       <p className="mt-4 text-xs text-faint print:mt-5 print:border-t print:border-line print:pt-3">
         <span className="hidden font-medium text-soft print:inline">How these numbers are defined — </span>
         <strong className="font-medium text-soft">Calls For Reporting Purpose</strong> = phone calls + drop-ins, counted from
-        logged activities (Phone Call, Voicemail, In-Person Visit). Meetings attended and events held are NOT included —
+        logged activities (Phone Call, Voicemail, In-Person Visit, Drop Box Visit — servicing a box counts as a drop-in). Meetings attended and events held are NOT included —
         they are reported separately below.
         Definitions match the Command Center and weekly reports — one source of truth. “Booked” counts appointments created in
         the period; “charged” and “collected” sum their amounts. Goal targets are the weekly goals from Settings, scaled to the period length.
