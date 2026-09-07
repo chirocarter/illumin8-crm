@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
 import { db, schema as s } from "@/db";
 import { authenticateAgent, agentAuthError } from "@/lib/agent-auth";
-import { AGENT_TRIGGERS, publicRun } from "@/lib/agent-runs";
+import {
+  AGENT_TRIGGERS, publicRun, runStartBlocked, MAX_RUNS_PER_DAY, STALE_RUN_HOURS,
+} from "@/lib/agent-runs";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,8 @@ export async function POST(req: NextRequest) {
 
   let body: unknown = {};
   if (req.headers.get("content-length") !== "0") {
-    try { body = await req.json(); } catch { return Response.json({ error: "Malformed JSON body" }, { status: 400 }); }
+    try { body = await req.json(); }
+    catch { return Response.json({ error: "Malformed JSON body" }, { status: 400 }); }
   }
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
     return Response.json({ error: "Body must be a JSON object" }, { status: 400 });
@@ -30,6 +33,25 @@ export async function POST(req: NextRequest) {
     return Response.json(
       { error: `"trigger" must be one of: ${AGENT_TRIGGERS.join(", ")}` },
       { status: 400 }
+    );
+  }
+
+  // One open run at a time, and a bounded number per day. Checked before the
+  // insert so a runaway caller cannot accumulate runs faster than it is refused.
+  const blocked = await runStartBlocked(auth.agent);
+  if (blocked) {
+    return Response.json(
+      blocked.reason === "open_run"
+        ? {
+            error: "This agent already has a run in progress",
+            openRunId: blocked.openRunId,
+            hint: `Complete it, or wait until it is ${STALE_RUN_HOURS}h old.`,
+          }
+        : {
+            error: `This agent has started ${MAX_RUNS_PER_DAY} runs in the last 24h`,
+            count: blocked.count,
+          },
+      { status: 409 }
     );
   }
 

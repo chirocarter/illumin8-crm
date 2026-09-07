@@ -7,7 +7,7 @@ import "server-only";
 // on the run, so the summary and the rows behind it cannot drift apart — the
 // same rule every metric in this app follows.
 import { db, schema as s } from "@/db";
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { AGENT_ACTIONS, AGENT_RUN_STATUSES } from "./taxonomy";
 
 // ---------------------------------------------------------------------------
@@ -144,3 +144,59 @@ export function publicRun(
 }
 
 export { AGENT_ACTIONS, AGENT_RUN_STATUSES };
+
+// ---------------------------------------------------------------------------
+// Run concurrency.
+//
+// The per-run caps bound damage inside a run; these bound how many runs a
+// leaked credential could open at all. The real job is one scheduled sweep a
+// week plus manual testing, so 10 a day is generous while keeping a runaway
+// loop finite.
+// ---------------------------------------------------------------------------
+
+export const MAX_OPEN_RUNS_PER_AGENT = 1;
+export const MAX_RUNS_PER_DAY = 10;
+
+/**
+ * Why a new run may not start, or null if it may.
+ *
+ * Counted per agent USER rather than per city: the identity holds the
+ * credential, so it is the thing whose blast radius is being bounded.
+ *
+ * A run older than STALE_RUN_HOURS stops blocking a new one, but is left
+ * honestly marked "running". It is not rewritten to "failed" — the agent never
+ * reported a failure, and inventing one would put a fact in the ledger that
+ * nothing actually observed.
+ */
+export async function runStartBlocked(
+  agent: { userId: number }
+): Promise<{ reason: "open_run" | "daily_cap"; openRunId?: number; count?: number } | null> {
+  // Ages are compared in JavaScript, not SQL. started_at is written by
+  // datetime('now','localtime'), so a cutoff built from toISOString() is UTC and
+  // silently wrong by the machine's offset - on a UTC-6 host every run looked six
+  // hours old the moment it was created, and this guard never fired. Parsing the
+  // stored string as local time is what loadOwnedRun already does.
+  const ageMs = (stamp: string) => {
+    const t = Date.parse(stamp.replace(" ", "T"));
+    return Number.isFinite(t) ? Date.now() - t : Infinity;
+  };
+
+  const openRuns = await db
+    .select({ id: s.agentRuns.id, startedAt: s.agentRuns.startedAt })
+    .from(s.agentRuns)
+    .where(and(eq(s.agentRuns.userId, agent.userId), eq(s.agentRuns.status, "running")));
+  const live = openRuns.find((r) => ageMs(r.startedAt) < STALE_RUN_HOURS * 3600_000);
+  if (live) return { reason: "open_run", openRunId: live.id };
+
+  // Bounded scan: only the most recent runs can fall inside 24h anyway.
+  const recent = await db
+    .select({ startedAt: s.agentRuns.startedAt })
+    .from(s.agentRuns)
+    .where(eq(s.agentRuns.userId, agent.userId))
+    .orderBy(desc(s.agentRuns.id))
+    .limit(MAX_RUNS_PER_DAY * 5);
+  const today = recent.filter((r) => ageMs(r.startedAt) < 24 * 3600_000).length;
+  if (today >= MAX_RUNS_PER_DAY) return { reason: "daily_cap", count: today };
+
+  return null;
+}

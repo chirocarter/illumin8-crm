@@ -8,6 +8,7 @@
 // books an event moves that business up the board on its own.
 import { db, schema as s } from "@/db";
 import { and, desc, eq, inArray, isNotNull, ne, notInArray, type SQL } from "drizzle-orm";
+import { humanCountableAccounts } from "./ai-review";
 import { NON_OUTREACH_EVENT_TYPES } from "./taxonomy";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 
@@ -55,7 +56,8 @@ export async function pipelineCards(
     db.select({
       id: s.accounts.id, name: s.accounts.name, status: s.accounts.status,
       nextFollowUpAt: s.accounts.nextFollowUpAt, lastContactedAt: s.accounts.lastContactedAt,
-    }).from(s.accounts).where(and(notInArray(s.accounts.status, CLOSED_STATUSES), ...inScope(s.accounts))),
+      // Unapproved AI candidates are not pipeline cards yet — see ai-review.ts.
+    }).from(s.accounts).where(and(notInArray(s.accounts.status, CLOSED_STATUSES), humanCountableAccounts(), ...inScope(s.accounts))),
 
     // Meetings and time-off are calendar entries, not outreach events, so they
     // must not push a business into an event stage.

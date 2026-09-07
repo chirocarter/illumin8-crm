@@ -8,6 +8,7 @@ import {
   OPEN_STAGES, NON_OUTREACH_EVENT_TYPES, MEETING_EVENT_TYPES, REPORTING_CALL_TYPES,
 } from "./taxonomy";
 import { followUpCondition } from "./followups";
+import { humanCountableAccounts } from "./ai-review";
 import { todayISO } from "./dates";
 import { scopeConds } from "./scope";
 
@@ -81,7 +82,9 @@ export async function metricValues(
     eventsHeld, screenings, apptsBooked, apptsShowed, noShows, charged, collected,
     hoursWorked, labourCost, directSpend, reportingCalls,
   ] = await Promise.all([
-    one(db.select({ c: count() }).from(s.accounts).where(and(gte(s.accounts.createdAt, from), lt(s.accounts.createdAt, upper(to)), ...inScope(s.accounts)))),
+    // humanCountableAccounts(): an AI prospect awaiting review is a candidate,
+    // not a business someone added. It stays out of this count until approved.
+    one(db.select({ c: count() }).from(s.accounts).where(and(gte(s.accounts.createdAt, from), lt(s.accounts.createdAt, upper(to)), humanCountableAccounts(), ...inScope(s.accounts)))),
     one(db.select({ c: count() }).from(s.leads).where(and(gte(s.leads.createdAt, from), lt(s.leads.createdAt, upper(to)), ...inScope(s.leads)))),
     one(db.select({ c: countDistinct(a.accountId) }).from(a).where(and(dateRange, inArray(a.type, [...CONTACT_ACTIVITY_TYPES]), isNotNull(a.accountId)))),
     act(),
