@@ -9,7 +9,25 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
-  role: text("role").notNull().default("admin"), // admin | user
+  // admin | user | agent.
+  // "agent" is a non-human identity for the AI outreach agent: it authenticates
+  // by API key, never by password, and requireAdmin() rejects it.
+  // NOTE the default is "admin" — any row created without an explicit role is
+  // an administrator, so the agent-user script must always set it.
+  role: text("role").notNull().default("admin"),
+  /**
+   * HMAC-SHA256 of this agent identity's API key, or null for people.
+   *
+   * A deterministic HMAC rather than a salted scrypt hash because the key
+   * arrives as a bearer token and has to be looked UP by value; scrypt cannot
+   * be queried. Kept apart from passwordHash on purpose — a leaked API key must
+   * never become a UI login.
+   *
+   * The city on THIS row is what scopes the agent. Ownership is derived from
+   * the identity that authenticated, never from a cityId in the request body,
+   * so one market's agent cannot reach another's records.
+   */
+  agentKeyHash: text("agent_key_hash").unique(),
   cityId: integer("city_id"), // the market this person works; members are locked to it
   // What an hour of this person's time costs. Logged hours are multiplied by it
   // to give the labour half of marketing spend.
@@ -59,6 +77,31 @@ export const accounts = sqliteTable("accounts", {
   doNotContact: integer("do_not_contact", { mode: "boolean" }).notNull().default(false),
   lastContactedAt: text("last_contacted_at"),
   nextFollowUpAt: text("next_follow_up_at"),
+  // ---- AI outreach agent ----
+  // Null on every human-entered business; only the agent writes these.
+  /** 0-100 fit score from the agent. Null = never researched. */
+  aiFitScore: integer("ai_fit_score"),
+  /**
+   * The research itself, as JSON text:
+   *   { summary, confidence, sources: [{url, note}], researchedAt, model }
+   * One column because these are always written together, always displayed
+   * together, and never filtered on individually — unlike aiFitScore, which is
+   * a real column precisely so it can be sorted and filtered.
+   */
+  aiResearch: text("ai_research"),
+  /**
+   * The run that CREATED this business. Null means a human added it.
+   * Doubles as the "created by agent" flag — a separate boolean would say
+   * less and could disagree with this.
+   */
+  agentRunId: integer("agent_run_id"),
+  /**
+   * Deliberately separate from `status`. That column is the sales pipeline and
+   * feeds the pipeline board, goals and reports; overloading it with review
+   * states would corrupt all three.
+   */
+  aiReviewStatus: text("ai_review_status"),   // null | Pending | Approved | Rejected
+  aiReviewReason: text("ai_review_reason"),
   // Ownership stamps, on every record table:
   //   cityId → which market it belongs to (scopes the day-to-day workflow)
   //   userId → who created it (powers per-person stats)
@@ -370,5 +413,52 @@ export const expenses = sqliteTable("expenses", {
   eventId: integer("event_id").references(() => events.id),
   cityId: integer("city_id").references(() => cities.id),
   userId: integer("user_id").references(() => users.id),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
+});
+
+// ============================ AI outreach agent ============================
+//
+// ONE shared system, one agent IDENTITY PER CITY. There is a single set of
+// tables, a single API and a single UI; "Illumin8 AI — Albuquerque" and
+// "Illumin8 AI — McKinney" are two rows in `users`, each with its own cityId
+// and its own API key. Nothing here knows the name of a city.
+//
+// cityId is NOT NULL on both tables, unlike the nullable stamps on the older
+// record tables. Those are nullable only because rows predate the column; an
+// agent row can never predate it, and a run with no city could not be scoped.
+
+/** One execution of the outreach agent, start to finish. */
+export const agentRuns = sqliteTable("agent_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  status: text("status").notNull().default("running"), // running | completed | failed
+  /** What kicked it off — "manual", "scheduled", a Make scenario id. Free text. */
+  trigger: text("trigger"),
+  /** Populated when status is failed; null otherwise. */
+  error: text("error"),
+  startedAt: text("started_at").notNull().default(sql`(datetime('now','localtime'))`),
+  completedAt: text("completed_at"),
+  // Inherited from the authenticating agent identity, never from the request.
+  cityId: integer("city_id").notNull().references(() => cities.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
+});
+
+/**
+ * Every action the agent took, in order. This is the ledger: run COUNTS are
+ * derived from it with one GROUP BY rather than stored on agent_runs, so the
+ * headline number and the list behind it cannot disagree — the same rule the
+ * rest of this app's metrics follow.
+ */
+export const agentActivities = sqliteTable("agent_activities", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  agentRunId: integer("agent_run_id").notNull().references(() => agentRuns.id),
+  /** The business acted on, when there is one (a bare error has none). */
+  accountId: integer("account_id").references(() => accounts.id),
+  /** One of AGENT_ACTIONS — a fixed vocabulary is what makes counts derivable. */
+  action: text("action").notNull(),
+  /** One short human-readable line: why it was skipped, what was found. */
+  detail: text("detail"),
+  // Copied from the run so the dashboard can scope without a join.
+  cityId: integer("city_id").notNull().references(() => cities.id),
   createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
 });

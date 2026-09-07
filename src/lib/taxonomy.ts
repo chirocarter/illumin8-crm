@@ -255,3 +255,29 @@ export const EXPENSE_CATEGORIES = [
   "Catering / Food", "Printing / Flyers", "Giveaways / Swag", "Event Fee",
   "Mileage / Travel", "Supplies", "Advertising", "Other",
 ] as const;
+
+// ============================ AI outreach agent ============================
+
+/** Agent run lifecycle. */
+export const AGENT_RUN_STATUSES = ["running", "completed", "failed"] as const;
+
+/**
+ * The fixed vocabulary of things the agent can record doing. Run counts are
+ * derived by grouping agent_activities on this column, so it has to stay a
+ * closed set — a free-text action would silently drop out of the totals.
+ */
+export const AGENT_ACTIONS = [
+  "discovered",        // found a candidate business
+  "duplicate_skipped", // already in the CRM
+  "researched",        // gathered and stored research
+  "qualified",         // scored as a fit
+  "rejected",          // scored as not a fit
+  "created",           // written into the CRM as a prospect
+  "error",             // something failed
+] as const;
+
+/** Human verdict on an agent-created business. Null = nothing to review. */
+export const AI_REVIEW_STATUSES = ["Pending", "Approved", "Rejected"] as const;
+
+/** The role value for a non-human agent identity. Never "admin", never "user". */
+export const AGENT_ROLE = "agent";
