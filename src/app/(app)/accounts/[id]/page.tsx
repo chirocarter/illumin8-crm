@@ -11,6 +11,38 @@ import { qs } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
+/** Bare hostname for a research link label. Never throws on a malformed URL. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+/** The stored research blob, read defensively — it is written by an automation. */
+type AiResearch = {
+  summary?: string;
+  confidence?: string;
+  sources?: { url: string; label?: string }[];
+};
+function parseAiResearch(raw: string | null): AiResearch | null {
+  if (!raw) return null;
+  try {
+    const r = JSON.parse(raw) as AiResearch;
+    return {
+      summary: typeof r.summary === "string" ? r.summary : undefined,
+      confidence: typeof r.confidence === "string" ? r.confidence : undefined,
+      // Only http(s) is ever rendered as a link, whatever ended up stored.
+      sources: Array.isArray(r.sources)
+        ? r.sources.filter((x) => typeof x?.url === "string" && /^https?:\/\//i.test(x.url))
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default async function AccountDetail({ params, searchParams }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<SP>;
@@ -20,6 +52,16 @@ export default async function AccountDetail({ params, searchParams }: {
   const id = Number(idStr);
   const account = await authorize(await db.query.accounts.findFirst({ where: eq(s.accounts.id, id) }));
   if (!account) notFound();
+
+  // Only fetched when the agent actually touched this business, so an ordinary
+  // human-entered account costs no extra queries.
+  const aiResearch = account.agentRunId !== null ? parseAiResearch(account.aiResearch) : null;
+  const reviewer = account.aiReviewedBy
+    ? await db.query.users.findFirst({
+        where: eq(s.users.id, account.aiReviewedBy),
+        columns: { name: true },
+      })
+    : null;
 
   const [contacts, opportunities, events, leads, appointments, activities, tasks, campaigns, partner, location, tagRows, activityCount, apptStats] =
     await Promise.all([
@@ -82,6 +124,58 @@ export default async function AccountDetail({ params, searchParams }: {
           sub={`${fmtMoney(Number(apptStats[0]?.collected ?? 0))} of ${fmtMoney(Number(apptStats[0]?.charged ?? 0))} collected`}
           href={`/appointments${qs({ accountId: id })}`} />
       </div>
+
+      {/* AI research — rendered only when the agent actually touched this
+          business, so an ordinary human-entered account is not cluttered with
+          an empty section. */}
+      {account.agentRunId !== null && (
+        <Card className="mt-5">
+          <CardHeader
+            title="AI research"
+            action={
+              <span className={`rounded-full px-2.5 py-1 text-[0.7rem] font-medium ${
+                account.aiReviewStatus === "Approved" ? "bg-good-soft text-good"
+                : account.aiReviewStatus === "Rejected" ? "bg-bad-soft text-bad"
+                : "bg-warn-soft text-accent-deep"}`}>
+                {account.aiReviewStatus === "Pending" ? "Awaiting your review"
+                  : account.aiReviewStatus === "Approved" ? "Approved by you"
+                  : account.aiReviewStatus === "Rejected" ? "Rejected by you"
+                  : "AI-created"}
+              </span>
+            } />
+          <div className="px-5 pb-5 text-sm">
+            <p className="text-xs text-faint">
+              Added by the outreach agent · run #{account.agentRunId}
+              {account.aiFitScore !== null && <> · fit score <span className="font-medium text-ink">{account.aiFitScore}</span></>}
+              {aiResearch?.confidence && <> · confidence <span className="font-medium text-ink">{aiResearch.confidence}</span></>}
+            </p>
+            {aiResearch?.summary && <p className="mt-2 text-soft">{aiResearch.summary}</p>}
+            {aiResearch?.sources?.length ? (
+              <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                {aiResearch.sources.map((src: { url: string; label?: string }, i: number) => (
+                  <a key={i} href={src.url} target="_blank" rel="noopener noreferrer nofollow"
+                    className="text-accent-deep underline underline-offset-2">
+                    {src.label ?? hostOf(src.url)}
+                  </a>
+                ))}
+              </p>
+            ) : null}
+            {account.aiReviewedAt && (
+              <p className="mt-3 border-t border-hairline pt-3 text-xs text-faint">
+                Reviewed {fmtDateTime(account.aiReviewedAt)}
+                {reviewer ? <> by <span className="font-medium text-ink">{reviewer.name}</span></> : null}
+                {account.aiReviewReason ? <> — {account.aiReviewReason}</> : null}
+              </p>
+            )}
+            {account.aiReviewStatus === "Pending" && (
+              <p className="mt-3 text-xs text-soft">
+                This business does not count toward your pipeline or reporting until you approve it on the{" "}
+                <Link href="/agent" className="text-accent-deep underline underline-offset-2">AI Agent</Link> page.
+              </p>
+            )}
+          </div>
+        </Card>
+      )}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">

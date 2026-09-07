@@ -1753,3 +1753,81 @@ export async function importCSV(fd: FormData) {
   }
   done(`/settings/import?imported=${imported}&skipped=${skipped}`);
 }
+
+// =============== AI prospect review ===============
+//
+// The human half of the agent loop. These are ordinary CRM server actions with
+// the ordinary session and the ordinary city check — deliberately NOT part of
+// the agent API. The agent proposes; a person decides, and the external
+// identity has no route to that decision.
+//
+// Terminology, because two things nearby are both called "rejected":
+//   • agent_activities.action = "rejected"  → research decided not to qualify a
+//     candidate; no account was ever created.
+//   • aiReviewStatus = "Rejected"           → a PERSON turned down a candidate
+//     the agent did create. That is what these actions write.
+
+const MAX_REVIEW_REASON = 400;
+
+/**
+ * Only a Pending prospect may be reviewed.
+ *
+ * Re-reviewing is refused rather than allowed to toggle: this data is meant to
+ * become training signal for the future agent, and a verdict that can be
+ * flipped from a list page is not a verdict. Changing a settled one should be a
+ * deliberate administrative act, which does not exist yet.
+ */
+async function loadPendingProspect(id: number) {
+  await assertOwned(s.accounts, id);
+  const account = await db.query.accounts.findFirst({
+    where: eq(s.accounts.id, id),
+    columns: { id: true, name: true, aiReviewStatus: true },
+  });
+  if (!account) throw new Error("Not found");
+  if (account.aiReviewStatus !== "Pending") {
+    throw new Error(
+      account.aiReviewStatus
+        ? `Already reviewed (${account.aiReviewStatus})`
+        : "Not an AI-created prospect"
+    );
+  }
+  return account;
+}
+
+export async function approveAIProspect(fd: FormData) {
+  const user = await requireUser();
+  const id = num(fd, "id")!;
+  await loadPendingProspect(id);
+
+  // Only the review columns are named. status, pipeline fields, aiResearch,
+  // aiFitScore, agentRunId, cityId and userId are all left exactly as they are —
+  // approval is a verdict on the candidate, not an edit of it.
+  await db.update(s.accounts).set({
+    aiReviewStatus: "Approved",
+    aiReviewedAt: nowISO(),   // server clock
+    aiReviewedBy: user.id,    // session, never request input
+    aiReviewReason: null,
+  }).where(eq(s.accounts.id, id));
+
+  // No counter is touched: humanCountableAccounts() already admits Approved,
+  // so the business simply becomes countable on the next query.
+  done(str(fd, "returnTo") ?? "/agent");
+}
+
+export async function rejectAIProspect(fd: FormData) {
+  const user = await requireUser();
+  const id = num(fd, "id")!;
+  const reason = str(fd, "reason");
+  // A rejection without a reason teaches nothing later.
+  if (!reason) throw new Error("A reason is required to reject a prospect");
+
+  await loadPendingProspect(id);
+  await db.update(s.accounts).set({
+    aiReviewStatus: "Rejected",
+    aiReviewReason: reason.slice(0, MAX_REVIEW_REASON),
+    aiReviewedAt: nowISO(),
+    aiReviewedBy: user.id,
+  }).where(eq(s.accounts.id, id));
+
+  done(str(fd, "returnTo") ?? "/agent");
+}

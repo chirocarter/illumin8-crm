@@ -102,6 +102,14 @@ export const accounts = sqliteTable("accounts", {
    */
   aiReviewStatus: text("ai_review_status"),   // null | Pending | Approved | Rejected
   aiReviewReason: text("ai_review_reason"),
+  /**
+   * Who reviewed it and when. Both come from the CRM session and the server
+   * clock - never from request input, and never writable through the agent API.
+   * Without these, "Approved" records a verdict but not who stands behind it,
+   * which is the half that makes the feedback worth keeping.
+   */
+  aiReviewedAt: text("ai_reviewed_at"),
+  aiReviewedBy: integer("ai_reviewed_by").references(() => users.id),
   // Ownership stamps, on every record table:
   //   cityId → which market it belongs to (scopes the day-to-day workflow)
   //   userId → who created it (powers per-person stats)
