@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { activeCity, allCities } from "@/lib/scope";
 import {
   ACCOUNT_STATUSES, APPOINTMENT_STATUSES, CAMPAIGN_TYPES, EVENT_TYPES,
-  LEAD_APPT_STATUSES, OPPORTUNITY_STAGES,
+  LEAD_APPT_STATUSES, OPPORTUNITY_STAGES, AGENT_ROLE,
 } from "@/lib/taxonomy";
 import type { SP } from "@/lib/lists";
 import { spStr } from "@/lib/lists";
@@ -21,7 +21,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     db.query.locations.findMany(),
     db.query.reportGoals.findMany({ orderBy: (g, { asc }) => [asc(g.sortOrder)] }),
     db.query.tags.findMany(),
-    isAdmin ? db.query.users.findMany({ orderBy: (u, { asc }) => [asc(u.name)] }) : Promise.resolve([]),
+    // Agent identities are deliberately absent. This list drives setUserRole,
+    // setUserCity and deleteUser — and setUserCity on an agent would silently
+    // repoint it at another market, quietly undoing the isolation its whole
+    // design rests on. Agents are managed by script, not by hand.
+    isAdmin
+      ? db.query.users.findMany({
+          where: (u, { ne }) => ne(u.role, AGENT_ROLE),
+          orderBy: (u, { asc }) => [asc(u.name)],
+        })
+      : Promise.resolve([]),
     allCities(),
     activeCity(),
   ]);

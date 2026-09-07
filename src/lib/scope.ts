@@ -14,9 +14,10 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
-import { and, asc, eq, type SQL } from "drizzle-orm";
+import { and, asc, eq, ne, type SQL } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { getSessionUser } from "./auth";
+import { AGENT_ROLE } from "./taxonomy";
 
 // Declared here rather than imported from ./lists so the dependency runs one
 // way only: lists depends on scope, never the reverse.
@@ -105,13 +106,21 @@ export async function resolveScope(sp: SP): Promise<StatScope> {
   return { mode, cityId: city?.id ?? null, userId: null, label: city?.name ?? "My city", params: {} };
 }
 
-/** People whose stats the viewer may switch to (admins only). */
+/**
+ * People whose stats the viewer may switch to (admins only).
+ *
+ * PEOPLE — agent identities are excluded. They are machine accounts, not
+ * colleagues, and listing them here would put them in the Command Center
+ * toggle beside real staff. Their work is visible on the agent dashboard
+ * instead.
+ */
 export async function selectableUsers() {
   const user = await getSessionUser();
   if (user?.role !== "admin") return [];
   return db
     .select({ id: s.users.id, name: s.users.name, cityId: s.users.cityId })
     .from(s.users)
+    .where(ne(s.users.role, AGENT_ROLE))
     .orderBy(asc(s.users.name));
 }
 

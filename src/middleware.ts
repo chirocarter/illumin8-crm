@@ -36,6 +36,11 @@ export async function middleware(req: NextRequest) {
     pathname === "/login" ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/join") || // public QR sign-up pages
+    // Agent API. Exempt from the SESSION check because an external agent has no
+    // cookie - it authenticates with a bearer credential instead. This does NOT
+    // make these routes public: every /api/agent handler must call
+    // authenticateAgent(), which is their only protection.
+    pathname.startsWith("/api/agent") ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.webmanifest"
   ) {
