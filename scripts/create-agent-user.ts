@@ -3,6 +3,7 @@
  *
  *   npx tsx scripts/create-agent-user.ts --city "Albuquerque"
  *   npx tsx scripts/create-agent-user.ts --city "McKinney" --apply
+ *   npx tsx scripts/create-agent-user.ts --city "Albuquerque" --rotate --apply
  *
  * Dry-run by default, like every other script in this repo. The raw credential
  * is printed ONCE, on creation, and is not recoverable afterwards — only its
@@ -24,6 +25,7 @@ const flag = (name: string): string | null => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : null;
 };
 const APPLY = args.includes("--apply");
+const ROTATE = args.includes("--rotate");
 
 async function main() {
   const cityName = flag("city");
@@ -62,10 +64,52 @@ async function main() {
   const existing = await db.query.users.findFirst({
     where: and(eq(s.users.role, AGENT_ROLE), eq(s.users.cityId, city.id)),
   });
+
+  // ---- rotation ----------------------------------------------------------
+  // Replaces the credential and nothing else. City, role, name, email and
+  // ownership are untouched, so rotating cannot quietly move an agent to
+  // another market - the exact mistake the whole design exists to prevent.
+  if (ROTATE) {
+    if (!existing) {
+      console.error(`No agent identity exists for ${city.name}. Nothing to rotate.`);
+      console.error("Create one first (omit --rotate).");
+      process.exit(1);
+    }
+    // Guard against the ambiguous case rather than guessing which to rotate.
+    const all = await db.select({ id: s.users.id }).from(s.users)
+      .where(and(eq(s.users.role, AGENT_ROLE), eq(s.users.cityId, city.id)));
+    if (all.length > 1) {
+      console.error(`${all.length} agent identities exist for ${city.name}: ids ${all.map(a => a.id).join(", ")}.`);
+      console.error("Refusing to guess which one to rotate. Resolve this by hand.");
+      process.exit(1);
+    }
+
+    console.log("would rotate the credential for:");
+    console.log(`  #${existing.id}  ${existing.name}  <${existing.email}>`);
+    console.log(`  city  ${city.name} (#${city.id})   role  ${existing.role}`);
+    console.log("  unchanged: city, role, name, email, ownership\n");
+    if (!APPLY) { console.log("DRY RUN - nothing written. Re-run with --apply to rotate."); return; }
+
+    const newKey = generateAgentKey();
+    const newHash = hashAgentKey(newKey);
+    if (!newHash) { console.error("Could not hash the new credential."); process.exit(1); }
+
+    await db.update(s.users).set({ agentKeyHash: newHash }).where(eq(s.users.id, existing.id));
+
+    console.log(`rotated credential for agent #${existing.id} (${city.name})`);
+    console.log("The previous credential stopped working immediately.\n");
+    console.log("-".repeat(72));
+    console.log("NEW BEARER CREDENTIAL - shown once, not recoverable. Store it now.");
+    console.log("-".repeat(72));
+    console.log(newKey);
+    console.log("-".repeat(72));
+    return;
+  }
+
   if (existing) {
     console.error(`An agent identity already exists for ${city.name}:`);
     console.error(`  #${existing.id}  ${existing.name}  <${existing.email}>`);
-    console.error("Refusing to create a second one. To rotate its credential, use --rotate.");
+    console.error("Refusing to create a second one. To replace its credential: --rotate --apply");
     process.exit(1);
   }
 
