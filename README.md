@@ -67,7 +67,9 @@ Documented here so reporting stays honest (also shown in the reports UI):
 - **Appointments booked** — appointments created in range; **showed/no-show** use the
   scheduled date. Revenue is only what you enter manually.
 - **Stale opportunity** — open stage, unchanged for 14+ days.
-- Weeks run **Monday–Sunday**.
+- Weeks run **Friday–Thursday**. The weekly report is pulled on Friday for the period
+  that closed the night before, so a week is anchored on Friday rather than Monday.
+  Defined once in `src/lib/dates.ts`; nothing else hard-codes a day.
 
 ## Deploying (use it on your phone, add teammates)
 
@@ -129,3 +131,38 @@ password in Settings → Profile after first sign-in.
   attribution and business development only. Lead/appointment notes fields say so.
 - Appointment tracking is for **attribution and performance**, not scheduling; the
   clinic's real scheduler remains the source of truth.
+
+## Traps worth knowing before you touch this
+
+Hard-won, each one having actually bitten:
+
+- **Backing up the local SQLite file needs a WAL checkpoint.** `data/outreach.db` runs in
+  WAL mode, so recent writes live in `outreach.db-wal` until they are checkpointed. A plain
+  `cp data/outreach.db backup.db` silently captures a *stale* database — a backup taken this
+  way once read 21 rows against a live 19, which looks exactly like data loss when you
+  compare them. Copy `data/outreach.db*` (all three files), or run
+  `PRAGMA wal_checkpoint(TRUNCATE);` first. The same reason `.gitignore` uses `data/*.db*`
+  rather than `data/*.db`.
+
+- **`drizzle-kit generate` is not trusted here.** The meta snapshots for migrations 0007–0012
+  were never created, so it diffs against 0006 and tries to replay six migrations — its output
+  once included `DROP TABLE campaigns`. Migrations 0007 onward are hand-written. Always read
+  generated SQL before applying it, and never run `drizzle-kit push`.
+
+- **`npm run db:migrate` targets PRODUCTION.** `loadEnvLocal()` reads `.env.turso` first. To
+  migrate only the local file, run it with `TURSO_DATABASE_URL=` set empty.
+
+- **Transactions are not reliable across the two drivers.** The local better-sqlite3 handle is
+  cast to the libsql type, and its `transaction()` is synchronous — an async callback commits
+  before a thrown error can roll anything back (verified: a forced failure left the row). The
+  production libsql driver *is* async. Code that needs atomicity would therefore behave
+  differently in production than locally, so nothing here depends on it.
+
+- **Timestamps are local time, not UTC.** Columns default to `datetime('now','localtime')`.
+  Comparing them against a cutoff built from `toISOString()` is wrong by the machine's offset —
+  on a UTC-6 host that made every agent run look six hours old the moment it was created.
+  Parse stored stamps as local (`Date.parse(s.replace(" ", "T"))`).
+
+- **Unlayered CSS beats Tailwind utilities.** `globals.css` rules written outside `@layer`
+  win over any layered utility regardless of specificity. That is why `.no-scrollbar` exists
+  as a rule rather than a utility, and why the grid `min-width` reset lives in `@layer base`.
