@@ -229,6 +229,50 @@ export const events = sqliteTable("events", {
   followUpRequired: integer("follow_up_required", { mode: "boolean" }).notNull().default(false),
   followUpDueAt: text("follow_up_due_at"),
   outcomeNotes: text("outcome_notes"),
+  /**
+   * The vendor / exhibitor application cut-off.
+   *
+   * A real column, not a key inside aiResearch, because it has to be sorted,
+   * filtered, compared against today and eventually turned into a task — none
+   * of which a date buried in JSON does cheaply. Supporting context (what the
+   * deadline covers, where it was published) still belongs in the research
+   * blob; the normalized date lives here.
+   *
+   * Deliberately NOT followUpDueAt. That field means "chase the host AFTER the
+   * event happened" and drives Today's Focus and the post-event task sweep —
+   * the same shape pointing the opposite way in time.
+   */
+  applicationDeadline: text("application_deadline"),
+  // ---- AI outreach agent ----
+  // Null on every human-entered event; only the agent writes these. Mirrors the
+  // block on `accounts` field for field, so one review flow can serve both.
+  /** 0-100 fit score from the agent. Null = never assessed. */
+  aiFitScore: integer("ai_fit_score"),
+  /**
+   * The research itself, as JSON text: summary, confidence, sources, organizer
+   * details, vendor cost, audience notes — and the changeLog that lets a
+   * previously seen event be resurfaced on a material development instead of
+   * discovered a second time.
+   */
+  aiResearch: text("ai_research"),
+  /** The run that DISCOVERED this event. Null means a human added it. */
+  agentRunId: integer("agent_run_id"),
+  /**
+   * Deliberately separate from `status`. That column is the event lifecycle —
+   * Idea → Planning → Booked → Completed — and it feeds the calendar, the
+   * pipeline board, the 6-events-a-week goal and bookedAt. Overloading it with
+   * a review state would corrupt all four.
+   *
+   * An agent-discovered event is born status 'Idea' + Pending. Approval sets
+   * this to 'Approved' and leaves status alone; only human CRM actions may
+   * cross the Booked boundary and stamp bookedAt.
+   */
+  aiReviewStatus: text("ai_review_status"),   // null | Pending | Approved | Rejected
+  aiReviewReason: text("ai_review_reason"),
+  /** Who reviewed it and when — from the session and the server clock, never
+      from request input, and never writable through the agent API. */
+  aiReviewedAt: text("ai_reviewed_at"),
+  aiReviewedBy: integer("ai_reviewed_by").references(() => users.id),
   cityId: integer("city_id").references(() => cities.id),
   userId: integer("user_id").references(() => users.id),
   createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
@@ -462,6 +506,13 @@ export const agentActivities = sqliteTable("agent_activities", {
   agentRunId: integer("agent_run_id").notNull().references(() => agentRuns.id),
   /** The business acted on, when there is one (a bare error has none). */
   accountId: integer("account_id").references(() => accounts.id),
+  /**
+   * The event acted on, when the action was about an event rather than a
+   * business. Exactly one of these is normally set; a bare error has neither.
+   * Without it the ledger could record that the agent did something to an event
+   * but not to WHICH event, which would stop it being an audit trail.
+   */
+  eventId: integer("event_id").references(() => events.id),
   /** One of AGENT_ACTIONS — a fixed vocabulary is what makes counts derivable. */
   action: text("action").notNull(),
   /** One short human-readable line: why it was skipped, what was found. */
