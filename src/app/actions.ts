@@ -1510,6 +1510,13 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
       { table: s.leads, col: s.leads.accountId, field: "accountId", label: "leads" },
       { table: s.projects, col: s.projects.accountId, field: "accountId", label: "projects" },
       { table: s.documents, col: s.documents.accountId, field: "accountId", label: "documents" },
+      { table: s.expenses, col: s.expenses.accountId, field: "accountId", label: "marketing spend" },
+      // The agent's audit ledger is DETACHED, never deleted. What the agent did
+      // is a fact about the run, and it stays true after a human removes the
+      // business — the entry keeps its detail line and loses only the pointer.
+      // Both drivers enforce this FK (Turso pins foreign_keys ON and ignores
+      // attempts to disable it), so without this line the delete throws.
+      { table: s.agentActivities, col: s.agentActivities.accountId, field: "accountId", label: "agent audit entries" },
     ],
     // partners.accountId and account_tags.accountId are NOT NULL — they cannot
     // be detached, so they go with the business.
@@ -1551,6 +1558,10 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
       { table: s.tasks, col: s.tasks.eventId, field: "eventId", label: "tasks" },
       { table: s.leads, col: s.leads.eventId, field: "eventId", label: "leads" },
       { table: s.appointments, col: s.appointments.eventId, field: "eventId", label: "appointments" },
+      { table: s.expenses, col: s.expenses.eventId, field: "eventId", label: "marketing spend" },
+      // Same rule as on a business: the ledger survives, detached. See the note
+      // in the account plan.
+      { table: s.agentActivities, col: s.agentActivities.eventId, field: "eventId", label: "agent audit entries" },
     ],
     remove: [],
   },
