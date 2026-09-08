@@ -235,6 +235,188 @@ export function validateEventResearch(raw: unknown): Pass<EventResearchPayload> 
 }
 
 // ---------------------------------------------------------------------------
+// Material developments
+// ---------------------------------------------------------------------------
+
+/**
+ * The kinds of change that justify asking a person to look again.
+ *
+ * A closed vocabulary, unlike the free-text research fields, because this list
+ * is what the New Developments surface is built on. If the agent could invent
+ * kinds, "summary refreshed" would eventually appear beside "registration
+ * opened" and the surface would stop meaning anything.
+ *
+ * Everything here changes whether or how Illumin8 can PARTICIPATE, or changes
+ * the value of participating by a lot. Reconfirming a known date, tidying a
+ * summary, or finding one more source that says the same thing does not belong
+ * — those are ordinary `researched` refreshes.
+ */
+export const DEVELOPMENT_KINDS = [
+  "vendor_registration_opened",
+  "sponsorship_opened",
+  "booth_pricing_published",
+  "application_deadline_announced",
+  "application_deadline_changed",
+  "organizer_identified",
+  "event_date_changed",
+  "audience_information_published",
+  "attendance_estimate_changed",
+  "event_expanded",
+  "event_reopened",
+  "event_cancelled",
+  "cancellation_reversed",
+  "participation_rules_changed",
+  "employer_component_announced",
+] as const;
+export type DevelopmentKind = (typeof DEVELOPMENT_KINDS)[number];
+
+export const MAX_DEVELOPMENT_DETAIL = 300;
+
+export type Development = {
+  kind: DevelopmentKind;
+  detail: string;
+  occurredAt?: string;
+  sources?: { url: string; label?: string }[];
+};
+
+export function validateDevelopment(raw: unknown): Pass<Development> | Fail {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "development must be a JSON object" };
+  }
+  const r = raw as Record<string, unknown>;
+  if (typeof r.kind !== "string" || !(DEVELOPMENT_KINDS as readonly string[]).includes(r.kind)) {
+    return { ok: false, error: `development.kind must be one of: ${DEVELOPMENT_KINDS.join(", ")}` };
+  }
+  const detail = boundedString(r.detail ?? "", "development.detail", MAX_DEVELOPMENT_DETAIL);
+  if (!detail.ok) return detail;
+  if (!detail.value.trim()) {
+    return { ok: false, error: "development.detail is required — say what actually changed" };
+  }
+  const out: Development = { kind: r.kind as DevelopmentKind, detail: detail.value.trim() };
+
+  if (r.occurredAt != null) {
+    if (typeof r.occurredAt !== "string" || !isCalendarDate(r.occurredAt.trim())) {
+      return { ok: false, error: "development.occurredAt must be a calendar date, YYYY-MM-DD" };
+    }
+    out.occurredAt = r.occurredAt.trim();
+  }
+  if (r.sources != null) {
+    if (!Array.isArray(r.sources)) return { ok: false, error: "development.sources must be an array" };
+    if (r.sources.length > MAX_SOURCES) {
+      return { ok: false, error: `development.sources exceeds ${MAX_SOURCES} entries` };
+    }
+    const sources: { url: string; label?: string }[] = [];
+    for (const [i, src] of r.sources.entries()) {
+      if (src === null || typeof src !== "object" || Array.isArray(src)) {
+        return { ok: false, error: `development.sources[${i}] must be an object` };
+      }
+      const sv = src as Record<string, unknown>;
+      if (typeof sv.url !== "string" || !/^https?:\/\//i.test(sv.url)) {
+        return { ok: false, error: `development.sources[${i}].url must be http or https` };
+      }
+      if (sv.url.length > MAX_URL_LENGTH) {
+        return { ok: false, error: `development.sources[${i}].url exceeds ${MAX_URL_LENGTH} characters` };
+      }
+      const entry: { url: string; label?: string } = { url: sv.url };
+      if (sv.label != null) {
+        const lbl = boundedString(sv.label, `development.sources[${i}].label`, MAX_LABEL_LENGTH);
+        if (!lbl.ok) return lbl;
+        entry.label = lbl.value;
+      }
+      sources.push(entry);
+    }
+    out.sources = sources;
+  }
+  return { ok: true, value: out };
+}
+
+/**
+ * A short, stable prefix identifying one development, used both as the leading
+ * token of the ledger detail line and as the de-duplication key within a run.
+ *
+ * Kind plus a normalized slice of the detail: reporting the same kind with the
+ * same wording twice in one run is the noise worth suppressing, while the same
+ * kind with genuinely different detail ("pricing published" then "pricing
+ * changed again") still gets through.
+ */
+export function developmentFingerprint(d: Development): string {
+  const slug = d.detail.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 60);
+  return `[${d.kind}:${slug}]`;
+}
+
+/**
+ * Merge incoming research over stored research WITHOUT losing change history.
+ *
+ * The stored changeLog is authoritative and append-only through this path. An
+ * incoming payload may add entries but can never shorten or rewrite the log:
+ * the external agent is not trusted to echo months of accumulated history back
+ * perfectly on every call, and one forgetful payload must not erase it.
+ *
+ * Everything else in the research blob IS replaced by the incoming values —
+ * summary, confidence, sources and the rest are a current snapshot, and that is
+ * what a refresh means.
+ */
+export function mergeChangeLog(input: {
+  stored: string | null;
+  incoming: Record<string, unknown> | null;
+  development: Development | null;
+}): { ok: true; json: string; entryCount: number } | Fail {
+  let storedObj: Record<string, unknown> = {};
+  try { if (input.stored) storedObj = JSON.parse(input.stored) as Record<string, unknown>; } catch { storedObj = {}; }
+
+  const storedLog = Array.isArray(storedObj.changeLog)
+    ? (storedObj.changeLog as { at?: unknown; note?: unknown; source?: unknown }[])
+        .filter((e) => e && typeof e === "object" && typeof e.note === "string")
+        .map((e) => ({
+          at: typeof e.at === "string" ? e.at : "",
+          note: e.note as string,
+          ...(typeof e.source === "string" ? { source: e.source } : {}),
+        }))
+    : [];
+
+  // Start from the incoming snapshot when there is one, otherwise keep what is
+  // stored. Either way the log below is rebuilt from the stored history.
+  const base: Record<string, unknown> = input.incoming
+    ? { ...input.incoming }
+    : { ...storedObj };
+  delete base.changeLog;
+
+  const log = [...storedLog];
+
+  // An incoming payload may propose entries; only ones not already present are
+  // added, matched on note text so a re-sent history is idempotent.
+  if (input.incoming && Array.isArray(input.incoming.changeLog)) {
+    for (const e of input.incoming.changeLog as { at?: string; note?: string; source?: string }[]) {
+      if (!e?.note) continue;
+      if (log.some((x) => x.note === e.note)) continue;
+      log.push({ at: e.at ?? "", note: e.note, ...(e.source ? { source: e.source } : {}) });
+    }
+  }
+
+  if (input.development) {
+    const note = `${input.development.kind}: ${input.development.detail}`;
+    if (!log.some((x) => x.note === note)) {
+      log.push({
+        at: input.development.occurredAt ?? new Date().toISOString().slice(0, 10),
+        note,
+        ...(input.development.sources?.[0]?.url ? { source: input.development.sources[0].url } : {}),
+      });
+    }
+  }
+
+  // Oldest entries fall off first if the log outgrows its bound — recent
+  // developments are the ones a person acts on.
+  const trimmed = log.slice(-MAX_CHANGELOG_ENTRIES);
+  const out = trimmed.length ? { ...base, changeLog: trimmed } : base;
+
+  const json = JSON.stringify(out);
+  if (json.length > MAX_RESEARCH_BYTES) {
+    return { ok: false, error: `aiResearch exceeds ${MAX_RESEARCH_BYTES} bytes when stored (changeLog has ${trimmed.length} entries)` };
+  }
+  return { ok: true, json, entryCount: trimmed.length };
+}
+
+// ---------------------------------------------------------------------------
 // Duplicate detection
 // ---------------------------------------------------------------------------
 

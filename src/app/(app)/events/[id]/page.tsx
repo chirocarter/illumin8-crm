@@ -9,6 +9,7 @@ import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, LinkableMetri
 import { saveEventOutcome } from "@/app/actions";
 import { fmtDate, fmtDateTime, fmtMoney, todayISO } from "@/lib/dates";
 import { qs } from "@/lib/metrics";
+import { parseEventResearch } from "@/lib/agent-event-review";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,17 @@ export default async function EventDetail({ params, searchParams }: {
     db.query.activities.findMany({ where: eq(s.activities.eventId, id), orderBy: [desc(s.activities.occurredAt)], limit: 10 }),
   ]);
   const partner = partnerRow[0];
+
+  // The AI panel appears only when this event actually came from the agent, or
+  // has been reviewed. A hand-entered event renders exactly as it always did.
+  const isAI = event.agentRunId !== null || event.aiReviewStatus !== null;
+  const research = parseEventResearch(event.aiResearch);
+  const reviewer = event.aiReviewedBy
+    ? await db.query.users.findFirst({
+        where: eq(s.users.id, event.aiReviewedBy),
+        columns: { name: true },
+      })
+    : null;
 
   const showed = appointments.filter((a) => a.status === "Showed").length;
   const charged = appointments.reduce((sum, a) => sum + a.revenue, 0) + event.revenue;
@@ -145,6 +157,103 @@ export default async function EventDetail({ params, searchParams }: {
         </div>
 
         <div className="space-y-5">
+          {/* Rendered ONLY when the agent has actually touched this event. An
+              event a person entered by hand shows nothing here at all — the
+              normal page must not grow an empty AI section it never needs. */}
+          {isAI && (
+            <Card>
+              <CardHeader
+                title="AI research"
+                action={
+                  <span className={`rounded-full px-2.5 py-1 text-[0.7rem] font-semibold ${
+                    event.aiReviewStatus === "Approved" ? "bg-good-soft text-good"
+                    : event.aiReviewStatus === "Rejected" ? "bg-bad-soft text-bad"
+                    : "bg-accent-soft text-accent-deep"
+                  }`}>
+                    {event.aiReviewStatus ?? "—"}
+                  </span>
+                } />
+              <div className="px-5 pb-5 text-sm">
+                {event.aiReviewStatus === "Pending" && (
+                  <p className="mb-3 rounded-xl bg-accent-soft px-3 py-2 text-xs text-accent-deep">
+                    Not yet reviewed. This event is on no calendar, in no list and in no number until you approve it
+                    on the <Link href="/agent" className="font-medium underline underline-offset-2">AI Agent</Link> page.
+                  </p>
+                )}
+                {event.aiReviewStatus === "Rejected" && event.aiReviewReason && (
+                  <p className="mb-3 rounded-xl bg-bad-soft px-3 py-2 text-xs text-bad">
+                    You rejected this: &ldquo;{event.aiReviewReason}&rdquo;
+                  </p>
+                )}
+
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                  {([
+                    ["Fit score", event.aiFitScore === null ? "Not scored" : String(event.aiFitScore)],
+                    ["Confidence", research.confidence ?? "—"],
+                    ["Organizer", research.organizer ?? "—"],
+                    ["Organizer contact", research.organizerContact ?? "—"],
+                    ["Vendor status", research.vendorStatus ?? "—"],
+                    ["Vendor cost", research.vendorCost ?? "—"],
+                    ["Apply by", event.applicationDeadline
+                      ? `${fmtDate(event.applicationDeadline)}${event.applicationDeadline < todayISO() ? " (passed)" : ""}`
+                      : "—"],
+                    ["Est. attendance", research.estimatedAttendance !== null ? research.estimatedAttendance.toLocaleString() : "—"],
+                    ["Reviewed", event.aiReviewedAt ? `${fmtDateTime(event.aiReviewedAt)}${reviewer ? ` by ${reviewer.name}` : ""}` : "—"],
+                    ["Discovered by", event.agentRunId ? `Run #${event.agentRunId}` : "—"],
+                  ] as [string, React.ReactNode][]).map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="text-faint">{k}</dt>
+                      <dd className="font-medium">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+
+                {research.potential && Object.keys(research.potential).length > 0 && (
+                  <dl className="mt-3 grid grid-cols-3 gap-x-6 gap-y-2 text-xs">
+                    {Object.entries(research.potential).map(([k, v]) => (
+                      <div key={k}>
+                        <dt className="text-faint capitalize">{k} potential</dt>
+                        <dd className="font-medium">{String(v)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+
+                {research.summary && <p className="mt-3 text-sm text-soft">{research.summary}</p>}
+
+                {research.sources.length > 0 && (
+                  <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    {research.sources.map((src, i) => (
+                      // noopener/nofollow: these URLs came from an automated
+                      // process, not from someone in the building.
+                      <a key={i} href={src.url} target="_blank" rel="noopener noreferrer nofollow"
+                        className="text-accent-deep underline underline-offset-2">
+                        {src.label ?? src.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
+                      </a>
+                    ))}
+                  </p>
+                )}
+
+                {research.changeLog.length > 0 && (
+                  <div className="mt-4 border-t border-hairline pt-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-faint">Developments</p>
+                    <ul className="space-y-1.5 text-xs">
+                      {[...research.changeLog].reverse().map((c, i) => (
+                        <li key={i} className="text-soft">
+                          <span className="text-faint">{c.at || "—"}</span> · {c.note}
+                          {c.source && (
+                            <> · <a href={c.source} target="_blank" rel="noopener noreferrer nofollow"
+                              className="text-accent-deep underline underline-offset-2">source</a></>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
           <Card>
             <CardHeader title="Event Info" />
             <dl className="space-y-2 px-5 pb-5 text-sm">

@@ -4,6 +4,7 @@
 import { db, schema as s } from "@/db";
 import { and, eq, like, or, type SQL } from "drizzle-orm";
 import { activeCityId } from "./scope";
+import { humanCountableEvents } from "./ai-review";
 
 export const SEARCH_GROUPS = [
   "Businesses", "Contacts", "Leads", "Opportunities", "Events", "Partners", "Campaigns",
@@ -37,7 +38,9 @@ export async function globalSearch(q: string, limitPerGroup = 5): Promise<Search
       limit: limitPerGroup,
     }),
     db.query.opportunities.findMany({ where: inCity(like(s.opportunities.name, term), s.opportunities.cityId), limit: limitPerGroup }),
-    db.query.events.findMany({ where: inCity(like(s.events.name, term), s.events.cityId), limit: limitPerGroup }),
+    // Unreviewed and rejected AI candidates stay out of search; the review
+    // queue on /agent is where they belong.
+    db.query.events.findMany({ where: inCity(and(like(s.events.name, term), humanCountableEvents())!, s.events.cityId), limit: limitPerGroup }),
     db.select({ id: s.partners.id, name: s.accounts.name, type: s.partners.partnerType, status: s.partners.status })
       .from(s.partners).innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
       .where(inCity(like(s.accounts.name, term), s.partners.cityId)).limit(limitPerGroup),

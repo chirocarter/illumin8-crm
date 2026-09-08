@@ -1842,3 +1842,75 @@ export async function rejectAIProspect(fd: FormData) {
 
   done(str(fd, "returnTo") ?? "/agent");
 }
+
+// =============== Reviewing AI-discovered EVENTS ===============
+//
+// Same rules as the business review above, on a different record type.
+//
+// What approval does NOT do, deliberately: it does not touch `status`. An
+// approved event stays 'Idea' and carries no bookedAt. Approval means "this is
+// worth putting into my outreach workflow", not "this is booked" — only a
+// person moving it through the normal lifecycle can make that claim, and only
+// that crossing stamps bookedAt.
+//
+// Rejection is NOT expressed as Canceled or Lost. Those words describe what
+// happened to the event in the real world; this is Carter's opinion of a piece
+// of AI research, and conflating them would corrupt both meanings.
+
+async function loadPendingEvent(id: number) {
+  await assertOwned(s.events, id); // same city, or admin — throws otherwise
+  const event = await db.query.events.findFirst({
+    where: eq(s.events.id, id),
+    columns: { id: true, name: true, aiReviewStatus: true },
+  });
+  if (!event) throw new Error("Not found");
+  // Immutable in V1: a verdict already recorded is not quietly overwritten.
+  // A rejected event that later becomes interesting is RESURFACED by the agent
+  // for Carter to look at again — the agent never reopens his decision itself.
+  if (event.aiReviewStatus !== "Pending") {
+    throw new Error(
+      event.aiReviewStatus
+        ? `Already reviewed (${event.aiReviewStatus})`
+        : "Not an AI-discovered event"
+    );
+  }
+  return event;
+}
+
+export async function approveAIEvent(fd: FormData) {
+  const user = await requireUser();
+  const id = num(fd, "id")!;
+  await loadPendingEvent(id);
+
+  // Only the review columns are named. status, bookedAt, startsAt, aiResearch,
+  // aiFitScore, agentRunId, cityId and userId are all left exactly as they are.
+  await db.update(s.events).set({
+    aiReviewStatus: "Approved",
+    aiReviewedAt: nowISO(),   // server clock
+    aiReviewedBy: user.id,    // session, never request input
+    aiReviewReason: null,
+  }).where(eq(s.events.id, id));
+
+  // No counter is touched: humanCountableEvents() already admits Approved, so
+  // the event simply becomes visible on the normal surfaces from the next query.
+  done(str(fd, "returnTo") ?? "/agent");
+}
+
+export async function rejectAIEvent(fd: FormData) {
+  const user = await requireUser();
+  const id = num(fd, "id")!;
+  const reason = str(fd, "reason");
+  // A rejection without a reason teaches nothing later — and the New
+  // Developments surface shows this reason back beside whatever changed.
+  if (!reason) throw new Error("A reason is required to reject an event");
+
+  await loadPendingEvent(id);
+  await db.update(s.events).set({
+    aiReviewStatus: "Rejected",
+    aiReviewReason: reason.slice(0, MAX_REVIEW_REASON),
+    aiReviewedAt: nowISO(),
+    aiReviewedBy: user.id,
+  }).where(eq(s.events.id, id));
+
+  done(str(fd, "returnTo") ?? "/agent");
+}

@@ -4,6 +4,7 @@ import { eq, gte, isNotNull, lt } from "drizzle-orm";
 import { PageHeader, Card, EmptyState, pillSm } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { cityWhere } from "@/lib/scope";
+import { humanCountableEvents } from "@/lib/ai-review";
 import { fmtDate, todayISO, addDays, weekdayIndex, WEEK_DAY_LABELS } from "@/lib/dates";
 import { MEETING_EVENT_TYPES } from "@/lib/taxonomy";
 import type { SP } from "@/lib/lists";
@@ -100,7 +101,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   // The calendar shows the city you're working in — nothing from the other market.
   const [events, appointments, tasks, pickups] = await Promise.all([
-    db.query.events.findMany({ where: await cityWhere(s.events.cityId, isNotNull(s.events.startsAt), gte(s.events.startsAt, first), lt(s.events.startsAt, upper)) }),
+    // humanCountableEvents(): an AI candidate awaiting review must not look
+    // like a commitment on Carter's calendar. Approved ones appear normally.
+    db.query.events.findMany({ where: await cityWhere(s.events.cityId, humanCountableEvents(), isNotNull(s.events.startsAt), gte(s.events.startsAt, first), lt(s.events.startsAt, upper)) }),
     db.query.appointments.findMany({ where: await cityWhere(s.appointments.cityId, isNotNull(s.appointments.scheduledAt), gte(s.appointments.scheduledAt, first), lt(s.appointments.scheduledAt, upper)) }),
     db.query.tasks.findMany({ where: await cityWhere(s.tasks.cityId, eq(s.tasks.status, "Open"), isNotNull(s.tasks.dueDate), gte(s.tasks.dueDate, first), lt(s.tasks.dueDate, upper)) }),
     db.select({ id: s.partners.id, name: s.accounts.name, due: s.partners.nextPickupDueAt })

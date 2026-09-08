@@ -8,7 +8,7 @@
 // books an event moves that business up the board on its own.
 import { db, schema as s } from "@/db";
 import { and, desc, eq, inArray, isNotNull, ne, notInArray, type SQL } from "drizzle-orm";
-import { humanCountableAccounts } from "./ai-review";
+import { humanCountableAccounts, humanCountableEvents } from "./ai-review";
 import { NON_OUTREACH_EVENT_TYPES } from "./taxonomy";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 
@@ -67,6 +67,10 @@ export async function pipelineCards(
     }).from(s.events).where(and(
       isNotNull(s.events.accountId),
       notInArray(s.events.type, [...NON_OUTREACH_EVENT_TYPES]),
+      // Defensive only: an agent event is born 'Idea' and carries no account,
+      // so neither condition above can currently admit one. Kept so the board
+      // stays correct if either ever changes.
+      humanCountableEvents(),
       ...inScope(s.events),
     )),
 

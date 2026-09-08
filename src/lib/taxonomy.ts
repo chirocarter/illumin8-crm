@@ -273,6 +273,21 @@ export const AGENT_ACTIONS = [
   "qualified",         // scored as a fit
   "rejected",          // scored as not a fit
   "created",           // written into the CRM as a prospect
+  /**
+   * A MATERIAL new development on a record that already exists — vendor
+   * registration opening, booth pricing published, a deadline announced, an
+   * organizer finally identified.
+   *
+   * Deliberately distinct from "researched". A research refresh happens on
+   * every sweep and is ordinary bookkeeping; this one says "look again". The
+   * New Developments surface is built from this action alone, so treating a
+   * routine refresh as material would bury the real signal in noise.
+   *
+   * No migration: `agent_activities.action` is free text validated against this
+   * list in application code, which is exactly what makes the vocabulary
+   * extensible without touching the database.
+   */
+  "resurfaced",
   "error",             // something failed
 ] as const;
 

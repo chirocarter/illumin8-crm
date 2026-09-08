@@ -77,10 +77,15 @@ export async function agentDashboard(cityId: number | null) {
       id: s.agentActivities.id, action: s.agentActivities.action,
       detail: s.agentActivities.detail, createdAt: s.agentActivities.createdAt,
       accountId: s.agentActivities.accountId, accountName: s.accounts.name,
+      // Events too, now that the agent acts on both. Without this an event
+      // activity would render as a line of text with nothing to click — the
+      // dead-end number this app is built to avoid.
+      eventId: s.agentActivities.eventId, eventName: s.events.name,
       runId: s.agentActivities.agentRunId,
     })
     .from(s.agentActivities)
     .leftJoin(s.accounts, eq(s.agentActivities.accountId, s.accounts.id))
+    .leftJoin(s.events, eq(s.agentActivities.eventId, s.events.id))
     .where(cityId ? eq(s.agentActivities.cityId, cityId) : undefined)
     .orderBy(desc(s.agentActivities.id))
     .limit(25);

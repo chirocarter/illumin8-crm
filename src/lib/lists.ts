@@ -13,6 +13,7 @@ import { todayISO, addDays, nowISO } from "./dates";
 import { listScope, scopeConds } from "./scope";
 import { followUpCondition } from "./followups";
 import { meetingsOnly, outreachEventsOnly } from "./metrics";
+import { humanCountableEvents, AI_REVIEW_PENDING, AI_REVIEW_REJECTED } from "./ai-review";
 
 export type SP = Record<string, string | string[] | undefined>;
 
@@ -296,6 +297,21 @@ export async function listOpportunities(sp: SP) {
 // ---------- Events ----------
 export async function listEvents(sp: SP) {
   const conds: SQL[] = await scopeStart(sp, s.events);
+
+  // AI review visibility. The default list is the OPERATIONAL one, so an
+  // unreviewed or rejected candidate stays out of it — otherwise a Pending
+  // possibility sits in the same table as real bookings and reads as one.
+  //
+  // `review` is the deliberate way back in, and it is what the /agent queue and
+  // its drill-downs use. CSV export goes through this function too, so the
+  // export inherits the same gate rather than needing its own.
+  const review = spStr(sp, "review");
+  if (review === AI_REVIEW_PENDING || review === AI_REVIEW_REJECTED) {
+    conds.push(eq(s.events.aiReviewStatus, review));
+  } else if (review !== "all") {
+    conds.push(humanCountableEvents());
+  }
+
   const status = spStr(sp, "status");
   if (status) conds.push(eq(s.events.status, status));
   const type = spStr(sp, "type");

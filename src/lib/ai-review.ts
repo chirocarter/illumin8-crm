@@ -41,3 +41,34 @@ export function humanCountableAccounts(): SQL {
     eq(s.accounts.aiReviewStatus, AI_REVIEW_APPROVED)
   )!;
 }
+
+/**
+ * Events that belong on a human's normal operational surfaces.
+ *
+ * Same allow-list shape as the account gate, and the same reasoning: NULL means
+ * a person entered it, Approved means a person let it in. Pending and Rejected
+ * are both excluded, so a rejected event stays out without anyone remembering
+ * to extend a deny-list.
+ *
+ * This is a REVIEW test, not a lifecycle test. It says nothing about Idea vs
+ * Booked vs Completed — an Approved event is still 'Idea' until a person moves
+ * it, and that is a separate question this function must never confuse itself
+ * with.
+ *
+ * Applied to the surfaces an audit identified as leaking:
+ *   • calendar          a Pending candidate looked like a real commitment
+ *   • events list       the default/"All" view
+ *   • global search
+ *   • CSV export        (through listEvents)
+ *   • pipeline          defensively; Idea status already keeps them off
+ *
+ * Deliberately NOT applied to the booked/held/screening metrics. Those are safe
+ * by construction — an agent event has no bookedAt and is never Completed — and
+ * adding a filter for symmetry would imply the numbers had been at risk.
+ */
+export function humanCountableEvents(): SQL {
+  return or(
+    isNull(s.events.aiReviewStatus),
+    eq(s.events.aiReviewStatus, AI_REVIEW_APPROVED)
+  )!;
+}

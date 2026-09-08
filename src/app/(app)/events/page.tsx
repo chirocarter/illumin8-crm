@@ -7,6 +7,8 @@ import ExportLink from "@/components/ExportLink";
 import { Icon } from "@/components/icons";
 import { EVENT_STATUSES, EVENT_TYPES } from "@/lib/taxonomy";
 import { fmtDateTime } from "@/lib/dates";
+import { eventReviewCounts } from "@/lib/agent-event-review";
+import { activeCityId } from "@/lib/scope";
 
 export const metadata = { title: "Events" };
 export const dynamic = "force-dynamic";
@@ -16,6 +18,10 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   const rows = await listEvents(sp);
   const held = spStr(sp, "heldFrom") || spStr(sp, "heldTo");
   const booked = spStr(sp, "bookedFrom") || spStr(sp, "bookedTo");
+  const review = spStr(sp, "review");
+  // Scoped to the city being worked in, like the list itself — an org-wide
+  // count beside a city-scoped list would promise rows the list cannot show.
+  const aiCounts = await eventReviewCounts(await activeCityId());
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -27,12 +33,38 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
         </>} />
 
       <div className="mb-3 flex flex-wrap gap-2">
-        <Link href="/events" className={!spStr(sp, "needsOutcome") && !spStr(sp, "upcoming") ? pillSm + " pill-active" : pillSm}>All</Link>
+        <Link href="/events" className={!spStr(sp, "needsOutcome") && !spStr(sp, "upcoming") && !review ? pillSm + " pill-active" : pillSm}>All</Link>
         <Link href="/events?upcoming=1" className={spStr(sp, "upcoming") ? pillSm + " pill-active" : pillSm}>Upcoming</Link>
         <Link href="/events?needsOutcome=1" className={spStr(sp, "needsOutcome") ? pillSm + " pill-active" : pillSm + " !text-accent-deep"}>
           Needs outcomes
         </Link>
+        {/* "All" above means all of YOUR events. AI candidates are deliberately
+            not in it until you approve them, so they need their own way in
+            rather than being invisible. Only shown when some exist. */}
+        {aiCounts.Pending > 0 && (
+          <Link href="/events?review=Pending" className={review === "Pending" ? pillSm + " pill-active" : pillSm + " !text-accent-deep"}>
+            Awaiting AI review · {aiCounts.Pending}
+          </Link>
+        )}
+        {aiCounts.Rejected > 0 && (
+          <Link href="/events?review=Rejected" className={review === "Rejected" ? pillSm + " pill-active" : pillSm}>
+            Rejected · {aiCounts.Rejected}
+          </Link>
+        )}
       </div>
+
+      {review === "Pending" && (
+        <p className="mb-3 rounded-xl bg-accent-soft px-4 py-2.5 text-sm text-accent-deep">
+          Found by the AI agent and not yet reviewed. These count toward nothing and appear on no calendar
+          until you approve them on the <Link href="/agent" className="font-medium underline underline-offset-2">AI Agent</Link> page.
+        </p>
+      )}
+      {review === "Rejected" && (
+        <p className="mb-3 rounded-xl bg-hairline px-4 py-2.5 text-sm text-soft">
+          You turned these down. They are kept as a record — and if the agent later finds something materially new,
+          it will say so on the AI Agent page rather than reopening your decision.
+        </p>
+      )}
 
       <FilterBar
         filters={[
