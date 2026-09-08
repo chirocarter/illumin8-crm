@@ -87,7 +87,8 @@ The app runs in two database modes with zero code changes:
 3. Apply schema + starting data to it from this machine (PowerShell):
    ```powershell
    $env:TURSO_DATABASE_URL="libsql://…"; $env:TURSO_AUTH_TOKEN="…"
-   npm run db:migrate
+   # --prod is required: without it this migrates the LOCAL file, never Turso.
+   npm run db:migrate -- --prod
    # Clean start for real use — admin login + Albuquerque/clinics + goals, no demo data.
    # Set ADMIN_PASSWORD first to choose the password, or read the temp one it prints.
    $env:ADMIN_PASSWORD="choose-a-strong-one"; npm run db:bootstrap
@@ -149,8 +150,28 @@ Hard-won, each one having actually bitten:
   once included `DROP TABLE campaigns`. Migrations 0007 onward are hand-written. Always read
   generated SQL before applying it, and never run `drizzle-kit push`.
 
-- **`npm run db:migrate` targets PRODUCTION.** `loadEnvLocal()` reads `.env.turso` first. To
-  migrate only the local file, run it with `TURSO_DATABASE_URL=` set empty.
+- **`npm run db:migrate` used to target PRODUCTION.** `loadEnvLocal()` reads `.env.turso`
+  before `.env.local`, so `TURSO_DATABASE_URL` is set on every dev machine and the plain
+  command silently migrated Turso. This was written down here as a warning and the warning
+  still failed — a local-only migration landed on production anyway. The script now decides by
+  flag rather than by environment:
+
+  ```
+  npm run db:migrate            # LOCAL data/outreach.db, always
+  npm run db:migrate -- --prod  # hosted Turso, printed loudly before it runs
+  ```
+
+  Without `--prod` a configured `TURSO_DATABASE_URL` is ignored and said so out loud. With
+  `--prod` and no URL configured, it refuses rather than quietly migrating the local file.
+  `db:seed` and `db:bootstrap` still branch on the environment variable alone — `db:reset`
+  already refuses when it is set.
+
+- **Foreign keys are enforced on BOTH drivers — but only one asks for it.** better-sqlite3
+  defaults `foreign_keys` to OFF, which is why `src/db/index.ts` sets it; hosted Turso pins it
+  ON and ignores `PRAGMA foreign_keys = OFF` entirely (verified against the live database).
+  Do not assume a constraint is decorative in production. The practical consequence: deleting a
+  row that agent ledger entries reference will fail in production too, so anything that deletes
+  events or accounts has to clear `agent_activities` first.
 
 - **Transactions are not reliable across the two drivers.** The local better-sqlite3 handle is
   cast to the libsql type, and its `transaction()` is synchronous — an async callback commits

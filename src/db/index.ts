@@ -25,6 +25,14 @@ function createDb(): DB {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   const sqlite = new Database(path.join(dataDir, "outreach.db"));
   sqlite.pragma("journal_mode = WAL");
+  // better-sqlite3 defaults foreign_keys to OFF, so it has to be asked for.
+  // The hosted side does NOT need an equivalent line: verified against the live
+  // Turso database that `PRAGMA foreign_keys` already reads 1 on every fresh
+  // statement, and that `PRAGMA foreign_keys = OFF` is ignored there — the
+  // server pins enforcement on and clients cannot disable it. The libsql driver
+  // was also confirmed to reject a bad reference and to refuse deleting a
+  // referenced row. So both drivers enforce constraints; this line is what
+  // makes the LOCAL one match production, not the other way round.
   sqlite.pragma("foreign_keys = ON");
   return drizzleSqlite(sqlite, { schema }) as unknown as DB;
 }
