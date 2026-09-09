@@ -133,6 +133,35 @@ password in Settings → Profile after first sign-in.
 - Appointment tracking is for **attribution and performance**, not scheduling; the
   clinic's real scheduler remains the source of truth.
 
+## Which database a command touches
+
+One convention, every script. **A bare command never touches production.**
+
+| Command | Target | Notes |
+| --- | --- | --- |
+| `npm run db:migrate` | LOCAL | applies pending migrations to `data/outreach.db` |
+| `npm run db:migrate -- --prod` | PRODUCTION | banner names the host before anything runs |
+| `npm run db:seed` | LOCAL | demo data |
+| `npm run db:seed -- --prod` | **refused** | demo data must never reach the live CRM |
+| `npm run db:bootstrap` | LOCAL | admin + city + goals, only if the database is empty |
+| `npm run db:bootstrap -- --prod` | PRODUCTION | the documented first-deploy step |
+| `npm run db:reset` | LOCAL only | refuses whenever any Turso config is present |
+| `npx tsx scripts/create-agent-user.ts --city "X"` | LOCAL | dry run |
+| `… --city "X" --apply` | LOCAL | creates the identity |
+| `… --city "X" --rotate --apply --prod` | PRODUCTION | rotates that city's bearer credential |
+
+Rules the shared resolver (`src/db/target.ts`) enforces:
+
+- Production intent is spelled **exactly** `--prod`. `--production`, `--live`, `--turso` and
+  unknown flags are **refused**, never quietly treated as local.
+- `--prod` with no `TURSO_DATABASE_URL` **refuses** rather than falling back to local — a
+  silent fallback would report success while production stayed untouched.
+- In local mode the resolver **deletes** `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` from the
+  process. `src/db/index.ts` picks its driver from that variable, so the hosted database is not
+  merely unselected, it is unreachable. That is the actual guarantee; the banner is just courtesy.
+- Every production banner names the host. None of them ever prints an auth token, a database
+  secret, or a credential hash.
+
 ## Traps worth knowing before you touch this
 
 Hard-won, each one having actually bitten:
@@ -163,8 +192,9 @@ Hard-won, each one having actually bitten:
 
   Without `--prod` a configured `TURSO_DATABASE_URL` is ignored and said so out loud. With
   `--prod` and no URL configured, it refuses rather than quietly migrating the local file.
-  `db:seed` and `db:bootstrap` still branch on the environment variable alone — `db:reset`
-  already refuses when it is set.
+
+  The same trap existed in `create-agent-user`, `db:seed` and `db:bootstrap`, and all three now
+  use the same resolver — see the command matrix above. `db:reset` was already safe.
 
 - **Foreign keys are enforced on BOTH drivers — but only one asks for it.** better-sqlite3
   defaults `foreign_keys` to OFF, which is why `src/db/index.ts` sets it; hosted Turso pins it

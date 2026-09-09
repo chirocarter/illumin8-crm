@@ -1,10 +1,15 @@
 // Seeds realistic Illumin8 outreach data. All dates are relative to "today"
 // so the dashboard and reports look alive whenever you run this.
-// Works against the local file or Turso — same env switch as the app.
+//
+// LOCAL ONLY, and refuses --prod outright. This is DEMO data: fictional
+// businesses, contacts and leads. There is no version of "seed the live CRM
+// with made-up records" that is a good idea, and the existing "already has
+// users" check is a soft guard — it would happily fill an empty production
+// database with fiction. Refusing the target is the harder guarantee.
 import { randomBytes, scryptSync } from "crypto";
 import { count } from "drizzle-orm";
 import * as s from "./schema";
-import { loadEnvLocal } from "./env";
+import { resolveTarget } from "./target";
 
 function pad(n: number) { return n < 10 ? `0${n}` : `${n}`; }
 function iso(d: Date) {
@@ -32,7 +37,12 @@ function hashPassword(password: string): string {
 }
 
 async function main() {
-  loadEnvLocal();
+  resolveTarget({
+    command: "db:seed",
+    known: [],
+    allowProd: false,   // demo data never reaches the live database
+    operation: "load demo businesses, contacts, leads and events",
+  });
   const { db } = await import("./index");
 
   const [existing] = await db.select({ c: count() }).from(s.users);

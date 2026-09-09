@@ -3,14 +3,18 @@
 //   • the Albuquerque city + its three clinic locations
 //   • the weekly report goals and the default tags
 // NO demo businesses/contacts/leads. Run once against a freshly-migrated
-// database:  npm run db:bootstrap   (works local or Turso via the env switch)
+// database:
+//   npm run db:bootstrap            → LOCAL
+//   npm run db:bootstrap -- --prod  → hosted Turso, announced first
+// Production is still reachable because standing up a fresh hosted database is
+// a real, documented deploy step — but it now has to be asked for.
 //
 // Admin password: set ADMIN_PASSWORD to choose it; otherwise a random temp is
 // generated and printed. Either way, change it on first sign-in (Settings → Profile).
 import { randomBytes, scryptSync } from "crypto";
 import { count, eq } from "drizzle-orm";
 import * as s from "./schema";
-import { loadEnvLocal } from "./env";
+import { resolveTarget } from "./target";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -18,9 +22,13 @@ function hashPassword(password: string): string {
 }
 
 async function main() {
-  loadEnvLocal();
+  const target = resolveTarget({
+    command: "db:bootstrap",
+    known: [],
+    operation: "create the admin user, city, locations, goals and tags (only if the database is empty)",
+  });
   const { db } = await import("./index");
-  const where = process.env.TURSO_DATABASE_URL ? "Turso (hosted)" : "local data/outreach.db";
+  const where = target.label;
 
   // Idempotent: never double-seed a database that already has users.
   const [existing] = await db.select({ c: count() }).from(s.users);
