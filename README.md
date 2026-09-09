@@ -150,6 +150,15 @@ One convention, every script. **A bare command never touches production.**
 | `… --city "X" --apply` | LOCAL | creates the identity |
 | `… --city "X" --rotate --apply --prod` | PRODUCTION | rotates that city's bearer credential |
 
+A `--prod` credential operation additionally **asks the live runtime** before it reports
+success: it writes the new hash, calls `/api/agent/whoami` on the deployed app with the new
+credential, and if the runtime rejects it, **puts the previous hash back** and exits non-zero.
+`AGENT_KEY_SECRET` exists in two places — this machine and the deployment — and nothing local
+can prove they match. Vercel also snapshots environment variables at build time, so even a
+correctly copied value can differ from what the running build holds until it is redeployed.
+Only the runtime knows, so the runtime is asked. Override the URL with `--verify-url` for a
+preview deployment.
+
 Rules the shared resolver (`src/db/target.ts`) enforces:
 
 - Production intent is spelled **exactly** `--prod`. `--production`, `--live`, `--turso` and

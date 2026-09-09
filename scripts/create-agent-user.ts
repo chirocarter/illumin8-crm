@@ -28,6 +28,55 @@ const flag = (name: string): string | null => {
 const APPLY = args.includes("--apply");
 const ROTATE = args.includes("--rotate");
 
+/**
+ * The base URL of the deployed runtime a --prod credential must work against.
+ * Overridable for a preview deployment; never a secret.
+ */
+const VERIFY_URL = (flag("verify-url") ?? process.env.PRODUCTION_APP_URL
+  ?? "https://illumin8-crm.vercel.app").replace(/\/+$/, "");
+
+/**
+ * Ask the LIVE deployment whether a credential actually authenticates.
+ *
+ * This is the only honest test of secret alignment. AGENT_KEY_SECRET lives in
+ * two places — this machine and the deployment — and nothing local can tell you
+ * they match. Worse, Vercel snapshots environment variables at BUILD time, so
+ * even a correctly-copied value can differ from what the running build holds
+ * until it is redeployed. Only the runtime knows.
+ *
+ * Sends the credential to the app's own domain over TLS and returns a verdict.
+ * Never logs the credential, the secret, or any hash.
+ */
+async function verifyAgainstRuntime(
+  rawKey: string,
+  expectedCity: string,
+): Promise<{ ok: true; agent: string; city: string } | { ok: false; why: string }> {
+  const url = `${VERIFY_URL}/api/agent/whoami`;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { Authorization: `Bearer ${rawKey}` } });
+  } catch (err) {
+    return { ok: false, why: `could not reach ${url} (${err instanceof Error ? err.message : "network error"})` };
+  }
+  if (res.status === 401) {
+    return { ok: false, why: `${url} rejected the credential (401) — the runtime's AGENT_KEY_SECRET differs from this machine's` };
+  }
+  if (res.status === 500) {
+    return { ok: false, why: `${url} reports agent authentication is not configured (500) — the deployment has no AGENT_KEY_SECRET set` };
+  }
+  if (!res.ok) return { ok: false, why: `${url} returned ${res.status}` };
+
+  const body = (await res.json().catch(() => null)) as
+    { authenticated?: boolean; agent?: string; city?: string } | null;
+  if (!body?.authenticated) return { ok: false, why: `${url} did not confirm authentication` };
+  // Belt and braces: a credential that authenticates as the WRONG market would
+  // be a far worse outcome than one that simply fails.
+  if (body.city !== expectedCity) {
+    return { ok: false, why: `the runtime resolved this credential to "${body.city}", not "${expectedCity}"` };
+  }
+  return { ok: true, agent: body.agent ?? "(unnamed)", city: body.city };
+}
+
 async function main(): Promise<number> {
   const cityName = flag("city");
   if (!cityName) {
@@ -40,9 +89,9 @@ async function main(): Promise<number> {
   // is about to touch, what it intends to do, and to whom. In local mode this
   // also strips the Turso variables, so the hosted driver becomes unreachable
   // rather than merely unselected.
-  resolveTarget({
+  const target = resolveTarget({
     command: "create-agent-user",
-    known: ["--city", "--apply", "--rotate"],
+    known: ["--city", "--apply", "--rotate", "--verify-url"],
     operation: `${ROTATE ? "ROTATE the bearer credential for" : "CREATE an agent identity for"} ` +
       `"${cityName}"${APPLY ? "" : "  (DRY RUN — nothing will be written)"}`,
   });
@@ -104,7 +153,33 @@ async function main(): Promise<number> {
     const newHash = hashAgentKey(newKey);
     if (!newHash) { console.error("Could not hash the new credential."); return 1; }
 
+    const previousHash = existing.agentKeyHash;
     await db.update(s.users).set({ agentKeyHash: newHash }).where(eq(s.users.id, existing.id));
+
+    // PREFLIGHT, after the write and before anyone is told it worked.
+    //
+    // The credential is hashed with whatever AGENT_KEY_SECRET this machine has,
+    // but the only secret that matters is the one the DEPLOYED RUNTIME holds —
+    // and those drifted apart once already, leaving the agent with no working
+    // credential at all. Asking the live runtime is the only proof that counts:
+    // a matching secret is not something to assume from a file.
+    //
+    // On failure the previous hash is put back, so a wrong secret costs nothing
+    // instead of destroying a working credential.
+    if (target.prod) {
+      const verdict = await verifyAgainstRuntime(newKey, city.name);
+      if (!verdict.ok) {
+        await db.update(s.users).set({ agentKeyHash: previousHash }).where(eq(s.users.id, existing.id));
+        console.error(`\nPREFLIGHT FAILED — ${verdict.why}`);
+        console.error("The previous credential hash has been RESTORED; nothing was changed.");
+        console.error("");
+        console.error("This almost always means the local AGENT_KEY_SECRET is not the one the");
+        console.error("deployed runtime uses. Align the local value with production's, then");
+        console.error("run this again. No credential was issued.");
+        return 1;
+      }
+      console.log(`preflight: the live runtime accepted the new credential as "${verdict.agent}" in ${verdict.city}`);
+    }
 
     console.log(`rotated credential for agent #${existing.id} (${city.name})`);
     console.log("The previous credential stopped working immediately.\n");
