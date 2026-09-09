@@ -91,8 +91,8 @@ The app runs in two database modes with zero code changes:
    npm run db:migrate -- --prod
    # Clean start for real use — admin login + Albuquerque/clinics + goals, no demo data.
    # Set ADMIN_PASSWORD first to choose the password, or read the temp one it prints.
-   $env:ADMIN_PASSWORD="choose-a-strong-one"; npm run db:bootstrap
-   # (Or `npm run db:seed` instead to load sample records for a demo.)
+   $env:ADMIN_PASSWORD="choose-a-strong-one"; npm run db:bootstrap -- --prod
+   # (`npm run db:seed` is LOCAL-ONLY and refuses --prod — demo data never goes live.)
    ```
 4. **Vercel**: sign up → "Import project" → pick the repo. Add three
    environment variables: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and
