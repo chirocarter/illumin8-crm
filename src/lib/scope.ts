@@ -124,6 +124,50 @@ export async function selectableUsers() {
     .orderBy(asc(s.users.name));
 }
 
+/**
+ * Which city a dashboard is showing, from `?city=` — clamped to what the
+ * viewer may actually see.
+ *
+ * Admins may pick any active city, or `all`. Everyone else is pinned to their
+ * own city no matter what the URL says, exactly as `listScope` treats them:
+ * a member typing `?city=2` gets their own market back, not McKinney's.
+ *
+ * Returns the cities worth offering as tabs, so a single-market install shows
+ * no selector at all rather than a group of one.
+ */
+export async function resolveCityView(sp: SP): Promise<{
+  cityId: number | null;
+  cityName: string;
+  options: City[];
+  canChoose: boolean;
+}> {
+  const [user, cities, current] = await Promise.all([getSessionUser(), allCities(), activeCity()]);
+  const isAdmin = user?.role === "admin";
+  const raw = Array.isArray(sp.city) ? sp.city[0] : sp.city;
+
+  if (!isAdmin) {
+    const mine = cities.find((c) => c.id === user?.cityId) ?? current;
+    return {
+      cityId: mine?.id ?? null,
+      cityName: mine?.name ?? "My city",
+      options: [],
+      canChoose: false,
+    };
+  }
+
+  // Offer the selector only when there is a genuine choice to make.
+  const canChoose = cities.length > 1;
+  if (raw === "all") return { cityId: null, cityName: "All cities", options: cities, canChoose };
+  const picked = cities.find((c) => c.id === Number(raw));
+  const city = picked ?? current ?? cities[0] ?? null;
+  return {
+    cityId: city?.id ?? null,
+    cityName: city?.name ?? "All cities",
+    options: cities,
+    canChoose,
+  };
+}
+
 // ---------- Applying a scope to a query ----------
 
 type Owned = { cityId: SQLiteColumn; userId: SQLiteColumn };

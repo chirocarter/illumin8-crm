@@ -40,6 +40,17 @@ const paths: Record<string, React.ReactNode> = {
   moon: <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />,
   target: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /></>,
   folder: <><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h9A1.5 1.5 0 0 1 21 10v8.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-11Z" /></>,
+  // An assistant's face. Deliberately not `users` (those are real people) and
+  // not `sparkle` (that is Leads) — the agent is a thing that works for you,
+  // so it gets a face of its own rather than borrowing either.
+  agent: <>
+    <rect x="4" y="8" width="16" height="12" rx="4" />
+    <path d="M12 4.5V8" />
+    <circle cx="12" cy="3.6" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="9.2" cy="13.5" r="1.15" fill="currentColor" stroke="none" />
+    <circle cx="14.8" cy="13.5" r="1.15" fill="currentColor" stroke="none" />
+    <path d="M9.8 16.8h4.4" />
+  </>,
 };
 
 export function Icon({ name, className = "h-5 w-5" }: { name: keyof typeof paths & string; className?: string }) {

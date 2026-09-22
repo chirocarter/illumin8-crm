@@ -3,7 +3,9 @@ import {
   approveAIProspect, rejectAIProspect, approveAIEvent, rejectAIEvent,
 } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
-import { activeCity } from "@/lib/scope";
+import { resolveCityView } from "@/lib/scope";
+import CityTabs from "@/components/CityTabs";
+import type { SP } from "@/lib/lists";
 import { agentDashboard } from "@/lib/agent-dashboard";
 import {
   pendingEventsForReview, newEventDevelopments, unreconciledEvents,
@@ -59,18 +61,19 @@ function ageHours(stamp: string): number {
   return Number.isFinite(t) ? (Date.now() - t) / 3600000 : 0;
 }
 
-export default async function AgentPage() {
+export default async function AgentPage({ searchParams }: { searchParams: Promise<SP> }) {
   await requireUser();
-  // The human city scope, exactly as every other page uses it — no second
-  // authorization system, and no mixing of markets.
-  const city = await activeCity();
+  const sp = await searchParams;
+  // Which market's agent work to show. Admins may switch or view all; everyone
+  // else is pinned to their own city whatever the URL says.
+  const { cityId, cityName, options, canChoose } = await resolveCityView(sp);
   const today = todayISO();
   const [{ latestRun, counts, pending, recent, errors, unreconciled },
          pendingEvents, developments, unreconciledEv] = await Promise.all([
-    agentDashboard(city?.id ?? null),
-    pendingEventsForReview(city?.id ?? null, today),
-    newEventDevelopments(city?.id ?? null),
-    unreconciledEvents(city?.id ?? null),
+    agentDashboard(cityId),
+    pendingEventsForReview(cityId, today),
+    newEventDevelopments(cityId),
+    unreconciledEvents(cityId),
   ]);
 
   const stale = latestRun?.status === "running" && ageHours(latestRun.startedAt) > STALE_RUN_HOURS;
@@ -86,10 +89,14 @@ export default async function AgentPage() {
         title="AI Agent"
         subtitle={
           <span>
-            Businesses and events found by the outreach agent · {city?.name ?? "All cities"} — nothing here
+            Businesses and events found by the outreach agent · {cityName} — nothing here
             counts toward your numbers, appears on your calendar, or reads as booked until you approve it
           </span>
         } />
+
+      {canChoose && (
+        <CityTabs basePath="/agent" sp={sp} cities={options} activeId={cityId} />
+      )}
 
       {/* Only rendered when something is actually wrong. */}
       {unreconciled.length > 0 && (
@@ -199,7 +206,7 @@ export default async function AgentPage() {
           ) : undefined} />
         {!latestRun ? (
           <p className="px-5 pb-5 text-sm text-faint">
-            The agent has not run in {city?.name ?? "this city"} yet.
+            The agent has not run in {cityName} yet.
           </p>
         ) : (
           <div className="px-5 pb-5">
