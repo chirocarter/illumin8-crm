@@ -150,10 +150,15 @@ export default async function CampaignDetail({ params, searchParams }: {
                     ? "New-patient sign-up — submissions appear under Leads, attributed to this campaign automatically."
                     : formType === "partnership"
                     ? "Business partnership form — asks what kind of partnership fits. Scans create the business under Accounts, a contact, and a lead, all attributed to this campaign."
+                    : formType === "contact"
+                    ? "General contact form — first name and phone required, email and a question optional. Submissions appear under Leads with the question in the notes, attributed to this campaign."
                     : "Lunch & learn form — asks about team size, space, and timing. Scans create the business under Accounts, a contact, and a lead, all attributed to this campaign."}
                 </p>
                 <p className="mt-1.5 rounded-full bg-hairline px-2.5 py-0.5 text-xs font-medium text-soft">
-                  {formType === "patient" ? "Collects: patient info" : formType === "partnership" ? "Collects: partnership interest" : "Collects: lunch & learn interest"}
+                  {formType === "patient" ? "Collects: patient info"
+                    : formType === "partnership" ? "Collects: partnership interest"
+                    : formType === "contact" ? "Collects: contact details + question"
+                    : "Collects: lunch & learn interest"}
                 </p>
               </div>
             </Card>

@@ -1,8 +1,16 @@
 // PUBLIC page — what people see when they scan a campaign QR code. No login,
-// mobile-first, styled like a mini landing page. Three form variants:
+// mobile-first, styled like a mini landing page. Four form variants:
 //   patient      → new-patient sign-up (lead)
 //   partnership  → a business that wants to partner (account + contact + lead)
 //   lunch        → a business interested in a lunch & learn (account + contact + lead)
+//   contact      → general contact: name, phone, email, optional question (lead)
+//
+// LAYOUT RULES, both learned on real phones:
+//   • On a phone the form fills the screen edge to edge. The floating card with
+//     gutters only appears from the sm breakpoint up, where there is room for it.
+//   • Every field is 16px text. iPhone Safari zooms in on focus for anything
+//     smaller, which pushes the page wider than the screen and makes it scroll
+//     side to side — the exact thing this page must never do.
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { eq } from "drizzle-orm";
@@ -35,10 +43,18 @@ const CONFIG: Record<PublicFormType, { headline: string; sub: string; cta: strin
     cta: "Count us in",
     privacy: "We'll only use this to plan your lunch & learn. No spam.",
   },
+  contact: {
+    headline: "Get in touch",
+    sub: "Leave your details and someone from our team will reach out.",
+    cta: "Send",
+    privacy: "We'll only use this to get back to you. No spam.",
+  },
 };
 
+// text-base (16px) is load-bearing, not a style choice: below 16px iPhone
+// Safari zooms the page on focus and the form starts scrolling sideways.
 const inputCls =
-  "w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-[0.95rem] text-neutral-900 outline-none transition-shadow placeholder:text-neutral-400 focus:border-[#d97706] focus:ring-2 focus:ring-[#fdf3e3]";
+  "block w-full min-w-0 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-base text-neutral-900 outline-none transition-shadow placeholder:text-neutral-400 focus:border-[#d97706] focus:ring-2 focus:ring-[#fdf3e3]";
 const labelCls = "mb-1.5 block text-[0.8rem] font-medium text-neutral-500";
 
 export default async function JoinPage({ params, searchParams }: {
@@ -59,15 +75,18 @@ export default async function JoinPage({ params, searchParams }: {
   // offer line ("Drop a card, win team lunch"), which is written as a headline.
   const headline = isBusiness ? (campaign.offer?.trim() || cfg.headline) : cfg.headline;
 
-  const chips = [
-    `${locations.length} ABQ location${locations.length === 1 ? "" : "s"}`,
-    "2-minute sign-up",
-    "No spam",
-  ];
+  const isContact = formType === "contact";
+  const chips = isContact
+    ? ["Takes 30 seconds", "No spam"]
+    : [
+        `${locations.length} ABQ location${locations.length === 1 ? "" : "s"}`,
+        "2-minute sign-up",
+        "No spam",
+      ];
 
   return (
-    <div className="flex min-h-screen items-start justify-center bg-gradient-to-b from-[#fff7ed] to-[#f4f4f5] px-4 py-8">
-      <div className="w-full max-w-md overflow-hidden rounded-[1.75rem] bg-white shadow-[0_10px_40px_-8px_rgba(180,83,9,0.25)]">
+    <div className="min-h-screen w-full overflow-x-hidden bg-white sm:flex sm:items-start sm:justify-center sm:bg-gradient-to-b sm:from-[#fff7ed] sm:to-[#f4f4f5] sm:px-4 sm:py-8">
+      <div className="min-h-screen w-full overflow-hidden bg-white sm:min-h-0 sm:max-w-md sm:rounded-[1.75rem] sm:shadow-[0_10px_40px_-8px_rgba(180,83,9,0.25)]">
         {/* Hero */}
         <div className="relative overflow-hidden bg-gradient-to-br from-brand-from to-brand-to px-6 pb-8 pt-9 text-center text-white">
           <div aria-hidden className="pointer-events-none absolute -top-20 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-white/20 blur-2xl" />
@@ -76,7 +95,7 @@ export default async function JoinPage({ params, searchParams }: {
             <Icon name="sunrise" className="h-8 w-8" />
           </span>
           <p className="relative text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/85">Illumin8 Chiropractic</p>
-          <h1 className="relative mx-auto mt-2 max-w-xs text-[1.55rem] font-bold leading-[1.15] tracking-tight">{headline}</h1>
+          <h1 className="relative mx-auto mt-2 max-w-xs break-words text-[1.55rem] font-bold leading-[1.15] tracking-tight">{headline}</h1>
           <p className="relative mx-auto mt-2.5 max-w-xs text-sm text-white/90">{cfg.sub}</p>
           <div className="relative mt-4 flex flex-wrap justify-center gap-1.5">
             {chips.map((c) => (
@@ -86,7 +105,7 @@ export default async function JoinPage({ params, searchParams }: {
         </div>
 
         {/* Form */}
-        <form action={submitPublicLead} className="space-y-3.5 px-6 pb-7 pt-6">
+        <form action={submitPublicLead} className="space-y-3.5 px-5 pb-8 pt-6 sm:px-6 sm:pb-7">
           <input type="hidden" name="token" value={token} />
           {/* honeypot — hidden from humans */}
           <input type="text" name="company" tabIndex={-1} autoComplete="off" aria-hidden
@@ -117,16 +136,26 @@ export default async function JoinPage({ params, searchParams }: {
             </label>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Stacked on a phone: side by side, an email address has ~140px. */}
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
             <label className="block">
-              <span className={labelCls}>Phone</span>
-              <input name="phone" type="tel" className={inputCls} autoComplete="tel" placeholder="(505) 555-0123" />
+              <span className={labelCls}>{isContact ? "Phone *" : "Phone"}</span>
+              <input name="phone" type="tel" required={isContact} inputMode="tel"
+                className={inputCls} autoComplete="tel" placeholder="(505) 555-0123" />
             </label>
             <label className="block">
               <span className={labelCls}>Email</span>
-              <input name="email" type="email" className={inputCls} autoComplete="email" />
+              <input name="email" type="email" inputMode="email" className={inputCls} autoComplete="email" />
             </label>
           </div>
+
+          {isContact && (
+            <label className="block">
+              <span className={labelCls}>Questions or comments (optional)</span>
+              <textarea name="message" rows={3} maxLength={1000} className={inputCls}
+                placeholder="Anything you'd like us to know?" />
+            </label>
+          )}
 
           {formType === "patient" && (
             <label className="block">
@@ -190,7 +219,9 @@ export default async function JoinPage({ params, searchParams }: {
 
           {error && (
             <p className="rounded-xl bg-[#fef1f1] px-3.5 py-2.5 text-sm font-medium text-[#dc2626]">
-              {isBusiness
+              {isContact
+                ? "Please add your first name and a phone number."
+                : isBusiness
                 ? "Please add your business name, your name, and a phone number or email."
                 : "Please add your name and a phone number or email."}
             </p>

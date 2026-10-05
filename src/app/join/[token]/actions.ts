@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { and, eq, like } from "drizzle-orm";
 import { normalizePublicForm } from "@/lib/taxonomy";
-import { formatPhone } from "@/lib/phone";
+import { formatPhone, phoneKey } from "@/lib/phone";
 
 const clean = (fd: FormData, key: string, max: number) =>
   String(fd.get(key) ?? "").trim().slice(0, max);
@@ -24,19 +24,34 @@ export async function submitPublicLead(fd: FormData) {
 
   const formType = normalizePublicForm(campaign!.publicForm);
   const isBusiness = formType === "partnership" || formType === "lunch";
+  const isContact = formType === "contact";
 
   // There's no session here, so ownership is inherited from the campaign whose
   // QR code was scanned: its city, and whoever created it.
   const own = { cityId: campaign!.cityId, userId: campaign!.userId };
 
+  const detailBits: string[] = [];
+
   const firstName = clean(fd, "firstName", 80);
   const lastName = clean(fd, "lastName", 80);
   const phone = formatPhone(clean(fd, "phone", 40));
   const email = clean(fd, "email", 120);
-  if (!firstName || (!phone && !email)) redirect(`/join/${token}?error=1`);
+  // The general contact form promises a call back, so a phone number is the one
+  // thing it can't do without. Seven digits rules out "n/a" and similar while
+  // still accepting an international number, which formatPhone leaves as typed.
+  // The other forms keep their original rule: a name plus any way to reach you.
+  if (isContact) {
+    if (!firstName || phoneKey(phone).length < 7) redirect(`/join/${token}?error=1`);
+  } else if (!firstName || (!phone && !email)) {
+    redirect(`/join/${token}?error=1`);
+  }
+
+  if (isContact) {
+    const message = clean(fd, "message", 1000);
+    if (message) detailBits.push(`Question / comment: ${message}`);
+  }
 
   let accountId = campaign!.accountId;
-  const detailBits: string[] = [];
 
   if (isBusiness) {
     const businessName = clean(fd, "businessName", 120);
@@ -119,9 +134,10 @@ export async function submitPublicLead(fd: FormData) {
     })(),
     interestLevel: "Warm",
     apptStatus: "Not Contacted",
-    notes: `Self-submitted via QR sign-up (${campaign!.name})${detailBits.length ? " — " + detailBits.join(" · ") : ""}`,
+    notes: `Self-submitted via ${isContact ? "general contact form" : "QR sign-up"} (${campaign!.name})${detailBits.length ? " — " + detailBits.join(" · ") : ""}`,
     ...own,
   });
 
-  redirect("/join/thanks");
+  // The thank-you copy differs: a contact form isn't a sign-up to be scheduled.
+  redirect(isContact ? "/join/thanks?f=contact" : "/join/thanks");
 }

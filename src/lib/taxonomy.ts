@@ -235,14 +235,16 @@ export const PUBLIC_FORM_TYPES = [
   { value: "patient", label: "New patient sign-up", hint: "Patient contact info → creates a lead." },
   { value: "partnership", label: "Business partnership", hint: "A business that wants to partner → creates the business, a contact, and a lead." },
   { value: "lunch", label: "Lunch & learn interest", hint: "A business interested in hosting a lunch & learn → creates the business, a contact, and a lead." },
+  { value: "contact", label: "General contact", hint: "Name, phone, email and an optional question → creates a lead." },
 ] as const;
 
-export type PublicFormType = "patient" | "partnership" | "lunch";
+export type PublicFormType = "patient" | "partnership" | "lunch" | "contact";
 
 /** Normalize stored/legacy values to a current form type. */
 export function normalizePublicForm(value: string | null | undefined): PublicFormType {
   if (value === "partnership") return "partnership";
   if (value === "lunch" || value === "business") return "lunch";
+  if (value === "contact") return "contact";
   return "patient"; // "patient", "person", null, anything else
 }
 
