@@ -47,6 +47,9 @@ export async function submitPublicLead(fd: FormData) {
   }
 
   if (isContact) {
+    // First in the notes, so whoever calls back sees it before anything else.
+    // Only a ticked box is recorded: an unticked one can't tell "no" from "skipped".
+    if (fd.get("existingPatient") === "yes") detailBits.push("Already an Illumin8 patient");
     const message = clean(fd, "message", 1000);
     if (message) detailBits.push(`Question / comment: ${message}`);
   }

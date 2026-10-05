@@ -3,7 +3,8 @@
 //   patient      → new-patient sign-up (lead)
 //   partnership  → a business that wants to partner (account + contact + lead)
 //   lunch        → a business interested in a lunch & learn (account + contact + lead)
-//   contact      → general contact: name, phone, email, optional question (lead)
+//   contact      → general contact: name, phone, email, "already a patient?",
+//                  optional question (lead)
 //
 // LAYOUT RULES, both learned on real phones:
 //   • On a phone the form fills the screen edge to edge. The floating card with
@@ -148,6 +149,14 @@ export default async function JoinPage({ params, searchParams }: {
               <input name="email" type="email" inputMode="email" className={inputCls} autoComplete="email" />
             </label>
           </div>
+
+          {/* The whole row is the tap target, not just the 20px box. */}
+          {isContact && (
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 transition-colors has-checked:border-[#d97706] has-checked:bg-[#fdf3e3]">
+              <input type="checkbox" name="existingPatient" value="yes" className="h-5 w-5 shrink-0 accent-[#d97706]" />
+              <span className="text-[0.95rem] text-neutral-800">I&rsquo;m already an Illumin8 patient</span>
+            </label>
+          )}
 
           {isContact && (
             <label className="block">

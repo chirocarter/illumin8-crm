@@ -235,7 +235,7 @@ export const PUBLIC_FORM_TYPES = [
   { value: "patient", label: "New patient sign-up", hint: "Patient contact info → creates a lead." },
   { value: "partnership", label: "Business partnership", hint: "A business that wants to partner → creates the business, a contact, and a lead." },
   { value: "lunch", label: "Lunch & learn interest", hint: "A business interested in hosting a lunch & learn → creates the business, a contact, and a lead." },
-  { value: "contact", label: "General contact", hint: "Name, phone, email and an optional question → creates a lead." },
+  { value: "contact", label: "General contact", hint: "Name, phone, email, an \"already a patient?\" box and an optional question → creates a lead." },
 ] as const;
 
 export type PublicFormType = "patient" | "partnership" | "lunch" | "contact";
