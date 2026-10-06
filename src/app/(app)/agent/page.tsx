@@ -1,6 +1,6 @@
 import { PageHeader, Card, CardHeader, RecordLink, EmptyState } from "@/components/ui";
 import {
-  approveAIProspect, rejectAIProspect, approveAIEvent, rejectAIEvent,
+  approveAIProspect, rejectAIProspect, approveAIEvent, rejectAIEvent, backfillAIApprovalTasks,
 } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
 import { resolveCityView } from "@/lib/scope";
@@ -62,7 +62,7 @@ function ageHours(stamp: string): number {
 }
 
 export default async function AgentPage({ searchParams }: { searchParams: Promise<SP> }) {
-  await requireUser();
+  const user = await requireUser();
   const sp = await searchParams;
   // Which market's agent work to show. Admins may switch or view all; everyone
   // else is pinned to their own city whatever the URL says.
@@ -96,6 +96,28 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
 
       {canChoose && (
         <CityTabs basePath="/agent" sp={sp} cities={options} activeId={cityId} />
+      )}
+
+      {user.role === "admin" && (
+        <Card className="mb-5">
+          <CardHeader title="Approved business follow-ups" />
+          <div className="px-5 pb-5 text-sm">
+            <p className="text-soft">
+              Add missing tasks for already-approved businesses in {cityName}, due the next business day.
+              Existing open or completed business tasks and canceled approval follow-ups are left alone.
+              Do-not-contact businesses and records without a city or human owner/reviewer are skipped.
+            </p>
+            {typeof sp.followUpsAdded === "string" && /^\d+$/.test(sp.followUpsAdded) && (
+              <p role="status" className="mt-2 text-good">{sp.followUpsAdded} follow-up tasks added.</p>
+            )}
+            <form action={backfillAIApprovalTasks} className="mt-3">
+              <input type="hidden" name="city" value={cityId === null ? "all" : String(cityId)} />
+              <button type="submit" className="rounded-full border border-line px-4 py-2 font-medium">
+                Add missing follow-up tasks
+              </button>
+            </form>
+          </div>
+        </Card>
       )}
 
       {/* Only rendered when something is actually wrong. */}
@@ -441,7 +463,9 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
       </div>
 
       <p className="mt-4 text-xs text-faint">
-        Approving a business lets it into your normal pipeline and reporting; approving an event lets it into your
+        Approving a business lets it into your normal pipeline and reporting and adds a linked follow-up task due
+        the next business day when eligible, unless an open/completed task already covers it. Tasks go to the
+        existing human owner, or otherwise the person who approved it. Approving an event lets it into your
         lists and calendar. Neither books anything — an approved event stays an idea until you move it through the
         normal lifecycle yourself, and only that stamps a booking date. Rejecting keeps a candidate out but
         preserves it, and your reason, as a record; if the agent later finds something materially new it says so

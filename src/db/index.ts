@@ -11,6 +11,8 @@ import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
 import path from "path";
 import fs from "fs";
 import * as schema from "./schema";
+import { atomicWrite, type WriteStatement } from "./atomic-write";
+import type { Client } from "@libsql/client";
 
 export type DB = LibSQLDatabase<typeof schema>;
 
@@ -41,5 +43,10 @@ const globalForDb = globalThis as unknown as { __db?: DB };
 
 export const db: DB = globalForDb.__db ?? createDb();
 if (process.env.NODE_ENV !== "production") globalForDb.__db = db;
+
+export function writeAtomically(statements: WriteStatement[]) {
+  const client = (db as unknown as { $client: Client | Database.Database }).$client;
+  return atomicWrite(client, statements);
+}
 
 export { schema };

@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
-import { db, schema as s } from "@/db";
+import { db, schema as s, writeAtomically } from "@/db";
+import { approvalWrites, backfillWrite, nextBusinessDay } from "@/lib/ai-approval-followups";
 import { and, count, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { nowISO, todayISO, addDays, fmtDate } from "@/lib/dates";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
@@ -14,7 +15,7 @@ import {
   ACCOUNT_STATUSES, INTEREST_LEVELS, LEAD_APPT_STATUSES,
   RELATIONSHIP_STRENGTHS, EVENT_STATUSES, EVENT_BOOKED_STATUSES, normalizePublicForm,
 } from "@/lib/taxonomy";
-import { activeCityId, canAccessCity, CITY_COOKIE } from "@/lib/scope";
+import { activeCityId, canAccessCity, CITY_COOKIE, resolveCityView } from "@/lib/scope";
 import { formatPhone } from "@/lib/phone";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 
@@ -1813,16 +1814,23 @@ export async function approveAIProspect(fd: FormData) {
   // Only the review columns are named. status, pipeline fields, aiResearch,
   // aiFitScore, agentRunId, cityId and userId are all left exactly as they are —
   // approval is a verdict on the candidate, not an edit of it.
-  await db.update(s.accounts).set({
-    aiReviewStatus: "Approved",
-    aiReviewedAt: nowISO(),   // server clock
-    aiReviewedBy: user.id,    // session, never request input
-    aiReviewReason: null,
-  }).where(eq(s.accounts.id, id));
+  // Verdict and task commit together: a task failure must not leave an approved
+  // business without its follow-up. Compare-and-set also prevents a concurrent
+  // review from being overwritten after loadPendingProspect's check.
+  const [reviewed] = await writeAtomically(approvalWrites(id, user.id, nowISO(), nextBusinessDay(todayISO())));
+  if (!reviewed) throw new Error("Already reviewed");
 
   // No counter is touched: humanCountableAccounts() already admits Approved,
   // so the business simply becomes countable on the next query.
   done(str(fd, "returnTo") ?? "/agent");
+}
+
+export async function backfillAIApprovalTasks(fd: FormData) {
+  await requireAdmin();
+  const { cityId } = await resolveCityView({ city: str(fd, "city") ?? undefined });
+  const [created] = await writeAtomically([backfillWrite(cityId, nextBusinessDay(todayISO()), nowISO())]);
+  const city = cityId === null ? "all" : String(cityId);
+  done(`/agent?city=${city}&followUpsAdded=${created}`);
 }
 
 export async function rejectAIProspect(fd: FormData) {
@@ -1838,7 +1846,7 @@ export async function rejectAIProspect(fd: FormData) {
     aiReviewReason: reason.slice(0, MAX_REVIEW_REASON),
     aiReviewedAt: nowISO(),
     aiReviewedBy: user.id,
-  }).where(eq(s.accounts.id, id));
+  }).where(and(eq(s.accounts.id, id), eq(s.accounts.aiReviewStatus, "Pending")));
 
   done(str(fd, "returnTo") ?? "/agent");
 }
