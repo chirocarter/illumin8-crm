@@ -20,12 +20,14 @@ function followUpInsert(where: string, args: WriteStatement["args"], due: string
     sql: `INSERT INTO tasks (title, due_date, account_id, notes, city_id, user_id, created_at)
       SELECT 'Follow up with ' || a.name, ?, a.id,
         ? || char(10) || 'Review the approved research and make the first outreach. Log activity from this task to complete it.',
-        a.city_id, CASE WHEN owner.role IN ('admin', 'user') THEN owner.id ELSE reviewer.id END, ?
+        a.city_id, CASE WHEN owner.role = 'admin' OR (owner.role = 'user' AND owner.city_id = a.city_id)
+          THEN owner.id ELSE reviewer.id END, ?
       FROM accounts a
       LEFT JOIN users owner ON owner.id = a.user_id
-      LEFT JOIN users reviewer ON reviewer.id = a.ai_reviewed_by AND reviewer.role IN ('admin', 'user')
+      LEFT JOIN users reviewer ON reviewer.id = a.ai_reviewed_by
+        AND (reviewer.role = 'admin' OR (reviewer.role = 'user' AND reviewer.city_id = a.city_id))
       WHERE ${where} AND a.do_not_contact = 0 AND a.city_id IS NOT NULL
-        AND (owner.role IN ('admin', 'user') OR reviewer.id IS NOT NULL)
+        AND (owner.role = 'admin' OR (owner.role = 'user' AND owner.city_id = a.city_id) OR reviewer.id IS NOT NULL)
         AND NOT EXISTS (
           SELECT 1 FROM tasks t WHERE t.account_id = a.id AND t.city_id IS a.city_id
           AND (t.status IN ('Open', 'Completed') OR substr(t.notes, 1, ?) = ?)

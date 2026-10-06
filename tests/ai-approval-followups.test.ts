@@ -96,9 +96,14 @@ for (const driver of ["local", "libsql"] as const) {
       await atomicWrite(client, [stmt("INSERT INTO tasks (title,account_id,city_id,user_id,status) VALUES ('Canceled manual',14,10,1,'Canceled')")]);
       assert.deepEqual(await atomicWrite(client, [backfillWrite(10, due, stamp)]), [1], "canceled manual task does not block follow-up");
       await add(15, { state: "Approved", reviewer: 1, dnc: 1 });
-      await add(16, { state: "Approved", owner: 2, reviewer: null });
-      assert.deepEqual(await atomicWrite(client, [backfillWrite(10, due, stamp)]), [1], "human owner is sufficient for historical approval");
+      await add(16, { state: "Approved", owner: 2, reviewer: null, city: 20 });
+      assert.deepEqual(await atomicWrite(client, [backfillWrite(20, due, stamp)]), [1], "human owner is sufficient for historical approval");
       assert.equal((await read("SELECT * FROM tasks WHERE account_id=15")).length, 0, "backfill respects do-not-contact");
+      await add(17, { owner: 2, city: 10 });
+      await atomicWrite(client, approvalWrites(17, 1, stamp, due));
+      assert.equal((await read("SELECT * FROM tasks WHERE account_id=17"))[0].user_id, 1, "moved member owner cannot receive an inaccessible task");
+      await add(18, { state: "Approved", owner: 3, reviewer: 2, city: 10 });
+      assert.deepEqual(await atomicWrite(client, [backfillWrite(null, due, stamp)]), [0], "out-of-city member reviewer cannot receive a task");
     } finally { client.close(); }
   });
 }

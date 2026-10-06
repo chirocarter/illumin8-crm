@@ -4,6 +4,7 @@ Approving an AI business now creates a linked **Open** task, due on the next
 weekday (Monday–Friday; holidays are not specially excluded). The task is
 assigned to the business's human owner, or to its human reviewer when the
 business was created by an agent identity. Its city always matches the business.
+Member owners/reviewers must belong to that city; admins may own tasks in any city.
 No outreach activity, booking, message, or performance credit is fabricated.
 Use the task's **Log activity** button to perform and record outreach; the
 existing activity workflow completes that exact task.
