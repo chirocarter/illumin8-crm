@@ -736,8 +736,16 @@ function partnerValues(fd: FormData) {
   };
 }
 
+// The Partners page lists businesses whose ACCOUNT status is Active Partner, so
+// saving a partner record as Active has to make the business one — otherwise
+// "New Partner" creates a partner that never appears there. One direction only:
+// pausing or ending a partnership doesn't guess what the business is now, and
+// re-saving an already-Active record leaves a hand-set account status alone.
 export async function createPartner(fd: FormData) {
-  const [row] = await db.insert(s.partners).values({ ...partnerValues(fd), ...(await stamp()) }).returning();
+  const values = partnerValues(fd);
+  await assertOwned(s.accounts, values.accountId);
+  const [row] = await db.insert(s.partners).values({ ...values, ...(await stamp()) }).returning();
+  if (values.status === "Active") await setAccountStatus(values.accountId, "Active Partner");
   done(`/partners/${row.id}`);
 }
 
@@ -745,7 +753,13 @@ export async function updatePartner(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
   await assertOwned(s.partners, id);
-  await db.update(s.partners).set(partnerValues(fd)).where(eq(s.partners.id, id));
+  const values = partnerValues(fd);
+  await assertOwned(s.accounts, values.accountId);
+  const before = await db.query.partners.findFirst({ where: eq(s.partners.id, id), columns: { status: true } });
+  await db.update(s.partners).set(values).where(eq(s.partners.id, id));
+  if (values.status === "Active" && before?.status !== "Active") {
+    await setAccountStatus(values.accountId, "Active Partner");
+  }
   done(`/partners/${id}`);
 }
 
