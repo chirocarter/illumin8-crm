@@ -21,19 +21,14 @@ export default async function LeadDetail({ params, searchParams }: {
   const lead = await authorize(await db.query.leads.findFirst({ where: eq(s.leads.id, id) }));
   if (!lead) notFound();
 
-  const [campaign, event, partnerRow, account, location, appointments, activities] = await Promise.all([
+  const [campaign, event, account, location, appointments, activities] = await Promise.all([
     lead.campaignId ? db.query.campaigns.findFirst({ where: eq(s.campaigns.id, lead.campaignId) }) : null,
     lead.eventId ? db.query.events.findFirst({ where: eq(s.events.id, lead.eventId) }) : null,
-    lead.partnerId
-      ? db.select({ id: s.partners.id, name: s.accounts.name }).from(s.partners)
-          .innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id)).where(eq(s.partners.id, lead.partnerId))
-      : Promise.resolve([]),
     lead.accountId ? db.query.accounts.findFirst({ where: eq(s.accounts.id, lead.accountId) }) : null,
     lead.preferredLocationId ? db.query.locations.findFirst({ where: eq(s.locations.id, lead.preferredLocationId) }) : null,
     db.query.appointments.findMany({ where: eq(s.appointments.leadId, id) }),
     db.query.activities.findMany({ where: eq(s.activities.leadId, id), orderBy: (a, { desc }) => [desc(a.occurredAt)] }),
   ]);
-  const partner = partnerRow[0];
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -49,7 +44,7 @@ export default async function LeadDetail({ params, searchParams }: {
             </Btn>
           </form>
           <BtnLink variant="outline" href={`/activities/new${qs({ leadId: id, returnTo: `/leads/${id}` })}`}>Log Activity</BtnLink>
-          <BtnLink href={`/appointments/new${qs({ leadId: id, eventId: lead.eventId, campaignId: lead.campaignId, partnerId: lead.partnerId, accountId: lead.accountId, locationId: lead.preferredLocationId, source: lead.source })}`}>
+          <BtnLink href={`/appointments/new${qs({ leadId: id, eventId: lead.eventId, campaignId: lead.campaignId, accountId: lead.accountId, locationId: lead.preferredLocationId, source: lead.source })}`}>
             Book Appointment
           </BtnLink>
         </>} />
@@ -81,7 +76,6 @@ export default async function LeadDetail({ params, searchParams }: {
               ["Source", lead.source ?? "—"],
               ["Campaign", campaign ? <RecordLink key="c" href={`/campaigns/${campaign.id}`}>{campaign.name}</RecordLink> : "—"],
               ["Event", event ? <RecordLink key="e" href={`/events/${event.id}`}>{event.name}</RecordLink> : "—"],
-              ["Partner", partner ? <RecordLink key="p" href={`/partners/${partner.id}`}>{partner.name}</RecordLink> : "—"],
               ["Business", account ? <RecordLink key="a" href={`/accounts/${account.id}`}>{account.name}</RecordLink> : "—"],
             ] as [string, React.ReactNode][]).map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3">

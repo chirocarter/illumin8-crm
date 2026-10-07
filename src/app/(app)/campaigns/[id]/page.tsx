@@ -27,12 +27,8 @@ export default async function CampaignDetail({ params, searchParams }: {
   if (!campaign) notFound();
   const formType = normalizePublicForm(campaign.publicForm);
 
-  const [account, partnerRow, leads, events, oppCount, apptStats, showedCount, docs] = await Promise.all([
+  const [account, leads, events, oppCount, apptStats, showedCount, docs] = await Promise.all([
     campaign.accountId ? db.query.accounts.findFirst({ where: eq(s.accounts.id, campaign.accountId) }) : null,
-    campaign.partnerId
-      ? db.select({ id: s.partners.id, name: s.accounts.name }).from(s.partners)
-          .innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id)).where(eq(s.partners.id, campaign.partnerId))
-      : Promise.resolve([]),
     db.query.leads.findMany({ where: eq(s.leads.campaignId, id), orderBy: [desc(s.leads.createdAt)] }),
     db.query.events.findMany({ where: eq(s.events.campaignId, id), orderBy: [desc(s.events.startsAt)] }),
     db.select({ c: count() }).from(s.opportunities).where(eq(s.opportunities.campaignId, id)),
@@ -49,7 +45,6 @@ export default async function CampaignDetail({ params, searchParams }: {
     }),
   ]);
 
-  const partner = partnerRow[0];
   const appts = Number(apptStats[0]?.c ?? 0);
   const conversion = leads.length > 0 ? Math.round((appts / leads.length) * 100) : 0;
 
@@ -70,7 +65,7 @@ export default async function CampaignDetail({ params, searchParams }: {
           {campaign.offer && <span className="text-soft">· {campaign.offer}</span>}</span>}
         actions={<>
           <BtnLink variant="outline" href={`/campaigns/${id}/edit`}>Edit</BtnLink>
-          <BtnLink href={`/leads/new${qs({ campaignId: id, partnerId: campaign.partnerId, accountId: campaign.accountId })}`}>Add Lead</BtnLink>
+          <BtnLink href={`/leads/new${qs({ campaignId: id, accountId: campaign.accountId })}`}>Add Lead</BtnLink>
         </>} />
 
       {/* Campaign funnel — deterministic, every number clickable */}
@@ -169,7 +164,6 @@ export default async function CampaignDetail({ params, searchParams }: {
             <dl className="space-y-2 px-5 pb-5 text-sm">
               {([
                 ["Type", campaign.type],
-                ["Partner", partner ? <RecordLink key="p" href={`/partners/${partner.id}`}>{partner.name}</RecordLink> : "—"],
                 ["Account", account ? <RecordLink key="a" href={`/accounts/${account.id}`}>{account.name}</RecordLink> : "—"],
                 ["Start", fmtDate(campaign.startDate)],
                 ["End", fmtDate(campaign.endDate)],

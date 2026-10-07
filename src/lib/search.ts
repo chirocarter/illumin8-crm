@@ -7,8 +7,10 @@ import { activeCityId } from "./scope";
 import { humanCountableEvents } from "./ai-review";
 
 export const SEARCH_GROUPS = [
-  "Businesses", "Contacts", "Leads", "Opportunities", "Events", "Partners", "Campaigns",
+  "Businesses", "Contacts", "Leads", "Opportunities", "Events", "Campaigns",
 ] as const;
+// No separate "Partners" group: a partner is a business, and finds itself under
+// Businesses wearing its Active Partner / Past Partner badge.
 export type SearchGroup = (typeof SEARCH_GROUPS)[number];
 
 export type SearchHit = {
@@ -27,7 +29,7 @@ export async function globalSearch(q: string, limitPerGroup = 5): Promise<Search
   const inCity = (col: SQL | ReturnType<typeof like>, cityCol: Parameters<typeof eq>[0]) =>
     city ? and(col, eq(cityCol, city)) : col;
 
-  const [accounts, contacts, leads, opportunities, events, partners, campaigns] = await Promise.all([
+  const [accounts, contacts, leads, opportunities, events, campaigns] = await Promise.all([
     db.query.accounts.findMany({ where: inCity(like(s.accounts.name, term), s.accounts.cityId), limit: limitPerGroup }),
     db.query.contacts.findMany({
       where: inCity(or(like(s.contacts.firstName, term), like(s.contacts.lastName, term), like(s.contacts.email, term))!, s.contacts.cityId),
@@ -41,9 +43,6 @@ export async function globalSearch(q: string, limitPerGroup = 5): Promise<Search
     // Unreviewed and rejected AI candidates stay out of search; the review
     // queue on /agent is where they belong.
     db.query.events.findMany({ where: inCity(and(like(s.events.name, term), humanCountableEvents())!, s.events.cityId), limit: limitPerGroup }),
-    db.select({ id: s.partners.id, name: s.accounts.name, type: s.partners.partnerType, status: s.partners.status })
-      .from(s.partners).innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
-      .where(inCity(like(s.accounts.name, term), s.partners.cityId)).limit(limitPerGroup),
     db.query.campaigns.findMany({ where: inCity(like(s.campaigns.name, term), s.campaigns.cityId), limit: limitPerGroup }),
   ]);
 
@@ -62,9 +61,6 @@ export async function globalSearch(q: string, limitPerGroup = 5): Promise<Search
     })),
     ...events.map((e): SearchHit => ({
       kind: "Events", label: e.name, sub: e.type, badge: e.status, href: `/events/${e.id}`,
-    })),
-    ...partners.map((p): SearchHit => ({
-      kind: "Partners", label: p.name, sub: p.type, badge: p.status, href: `/partners/${p.id}`,
     })),
     ...campaigns.map((c): SearchHit => ({
       kind: "Campaigns", label: c.name, sub: c.type, badge: c.status, href: `/campaigns/${c.id}`,

@@ -9,10 +9,10 @@ import { randomBytes } from "crypto";
 import { db, schema as s, writeAtomically } from "@/db";
 import { approvalWrites, backfillWrite, nextBusinessDay } from "@/lib/ai-approval-followups";
 import { and, count, eq, isNotNull, isNull, or } from "drizzle-orm";
-import { nowISO, todayISO, addDays, fmtDate } from "@/lib/dates";
+import { nowISO, todayISO, fmtDate } from "@/lib/dates";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
 import {
-  ACCOUNT_STATUSES, INTEREST_LEVELS, LEAD_APPT_STATUSES,
+  ACCOUNT_STATUSES, ACTIVE_PARTNER, INTEREST_LEVELS, LEAD_APPT_STATUSES,
   RELATIONSHIP_STRENGTHS, EVENT_STATUSES, EVENT_BOOKED_STATUSES, normalizePublicForm,
 } from "@/lib/taxonomy";
 import { activeCityId, canAccessCity, CITY_COOKIE, resolveCityView } from "@/lib/scope";
@@ -115,7 +115,14 @@ function accountValues(fd: FormData) {
 }
 
 export async function createAccount(fd: FormData) {
-  const [row] = await db.insert(s.accounts).values({ ...accountValues(fd), ...(await stamp()) }).returning();
+  const values = accountValues(fd);
+  const [row] = await db.insert(s.accounts).values({
+    ...values,
+    // Created as a partner (Partners → New Partner) is confirmed right now —
+    // stamped here because setAccountStatus only sees a change of status.
+    ...(values.status === ACTIVE_PARTNER ? { partnerSince: nowISO() } : {}),
+    ...(await stamp()),
+  }).returning();
   done(`/accounts/${row.id}`);
 }
 
@@ -228,7 +235,6 @@ export async function logActivity(fd: FormData) {
       contactId,
       opportunityId: num(fd, "opportunityId"),
       campaignId: num(fd, "campaignId"),
-      partnerId: num(fd, "partnerId"),
       clinicLocationId: num(fd, "newEventLocationId"),
       startsAt,
       endsAt: (() => {
@@ -294,7 +300,6 @@ export async function logActivity(fd: FormData) {
       accountId,
       contactId,
       campaignId: num(fd, "campaignId"),
-      partnerId: num(fd, "partnerId"),
       startsAt: occurredAt,
       status: "Completed", // it already happened
       bookedAt: nowISO(),
@@ -331,7 +336,6 @@ export async function logActivity(fd: FormData) {
         source,
         apptStatus: p.booked ? "Booked" : "Not Contacted",
         campaignId: num(fd, "campaignId"),
-        partnerId: num(fd, "partnerId"),
         eventId,
         accountId,
         // booked at a clinic → that's their preferred location
@@ -349,7 +353,6 @@ export async function logActivity(fd: FormData) {
           eventId,
           accountId,
           campaignId: num(fd, "campaignId"),
-          partnerId: num(fd, "partnerId"),
           locationId: Number.isFinite(locId) && locId > 0 ? locId : null,
           scheduledAt: p.apptDate?.trim() ? p.apptDate : occurredAt,
           revenue: Number.isFinite(rev) ? rev : 0,
@@ -371,7 +374,6 @@ export async function logActivity(fd: FormData) {
       apptStatus: "Contacted",
       campaignId: num(fd, "campaignId"),
       eventId,
-      partnerId: num(fd, "partnerId"),
       accountId,
       ...own,
     }).returning();
@@ -386,7 +388,6 @@ export async function logActivity(fd: FormData) {
     leadId,
     opportunityId: num(fd, "opportunityId"),
     eventId,
-    partnerId: num(fd, "partnerId"),
     campaignId: num(fd, "campaignId"),
     projectId: num(fd, "projectId"),
     occurredAt,
@@ -475,7 +476,6 @@ export async function logActivity(fd: FormData) {
       accountId,
       eventId,
       campaignId: num(fd, "campaignId"),
-      partnerId: num(fd, "partnerId"),
       locationId: num(fd, "apptLocationId"),
       scheduledAt: str(fd, "apptDate") ?? occurredAt,
       status: "Booked",
@@ -504,20 +504,6 @@ export async function logActivity(fd: FormData) {
     await db.update(s.contacts)
       .set({ lastContactedAt: occurredAt, ...(nextFollowUpAt ? { nextFollowUpAt } : {}) })
       .where(eq(s.contacts.id, contactId));
-  }
-
-  // Drop Box Visit: roll the collected cards into the partner's running total.
-  const dropCards = num(fd, "dropCards");
-  if (type === "Drop Box Visit" && accountId && dropCards) {
-    const partner = await db.query.partners.findFirst({ where: eq(s.partners.accountId, accountId) });
-    if (partner) {
-      await db.update(s.partners).set({
-        cardsCollected: partner.cardsCollected + dropCards,
-        lastPickupAt: occurredAt,
-        nextPickupDueAt: addDays(todayISO(), 7),
-        dropBoxStatus: "Placed",
-      }).where(eq(s.partners.id, partner.id));
-    }
   }
 
   // Talking to someone closes the follow-up that was waiting on that
@@ -714,87 +700,11 @@ export async function setOpportunityStage(fd: FormData) {
   done(str(fd, "returnTo") ?? "/pipeline");
 }
 
-// =============== Partners ===============
-function partnerValues(fd: FormData) {
-  return {
-    accountId: num(fd, "accountId")!,
-    partnerType: str(fd, "partnerType") ?? "Business Partner",
-    status: str(fd, "status") ?? "Prospective",
-    startDate: str(fd, "startDate"),
-    mainContactId: num(fd, "mainContactId"),
-    clinicLocationId: num(fd, "clinicLocationId"),
-    benefits: str(fd, "benefits"),
-    notes: str(fd, "notes"),
-    dropBoxActive: bool(fd, "dropBoxActive"),
-    dropBoxStatus: str(fd, "dropBoxStatus"),
-    lastPickupAt: str(fd, "lastPickupAt"),
-    nextPickupDueAt: str(fd, "nextPickupDueAt"),
-    lunchOffer: str(fd, "lunchOffer"),
-    cateringInfo: str(fd, "cateringInfo"),
-    cardsCollected: num(fd, "cardsCollected") ?? 0,
-    revenueSpent: num(fd, "revenueSpent") ?? 0,
-  };
-}
-
-// The Partners page lists businesses whose ACCOUNT status is Active Partner, so
-// saving a partner record as Active has to make the business one — otherwise
-// "New Partner" creates a partner that never appears there. One direction only:
-// pausing or ending a partnership doesn't guess what the business is now, and
-// re-saving an already-Active record leaves a hand-set account status alone.
-export async function createPartner(fd: FormData) {
-  const values = partnerValues(fd);
-  await assertOwned(s.accounts, values.accountId);
-  const [row] = await db.insert(s.partners).values({ ...values, ...(await stamp()) }).returning();
-  if (values.status === "Active") await setAccountStatus(values.accountId, "Active Partner");
-  done(`/partners/${row.id}`);
-}
-
-export async function updatePartner(fd: FormData) {
-  await requireUser();
-  const id = num(fd, "id")!;
-  await assertOwned(s.partners, id);
-  const values = partnerValues(fd);
-  await assertOwned(s.accounts, values.accountId);
-  const before = await db.query.partners.findFirst({ where: eq(s.partners.id, id), columns: { status: true } });
-  await db.update(s.partners).set(values).where(eq(s.partners.id, id));
-  if (values.status === "Active" && before?.status !== "Active") {
-    await setAccountStatus(values.accountId, "Active Partner");
-  }
-  done(`/partners/${id}`);
-}
-
-/** Quick action: log a drop box pickup — updates counters and schedules the next one. */
-export async function recordDropBoxPickup(fd: FormData) {
-  await requireUser();
-  const id = num(fd, "id")!;
-  await assertOwned(s.partners, id);
-  const cards = num(fd, "cards") ?? 0;
-  const partner = await db.query.partners.findFirst({ where: eq(s.partners.id, id) });
-  if (!partner) done("/partners");
-  await db.update(s.partners).set({
-    cardsCollected: partner!.cardsCollected + cards,
-    lastPickupAt: nowISO(),
-    nextPickupDueAt: addDays(todayISO(), 7),
-    dropBoxStatus: "Placed",
-  }).where(eq(s.partners.id, id));
-  await db.insert(s.activities).values({
-    type: "Drop Box Visit",
-    outcome: "Follow-Up Needed",
-    accountId: partner!.accountId,
-    partnerId: id,
-    occurredAt: nowISO(),
-    notes: `Drop box pickup — collected ${cards} cards.`,
-    ...(await stamp()),
-  });
-  done(`/partners/${id}`);
-}
-
 // =============== Campaigns ===============
 function campaignValues(fd: FormData) {
   return {
     name: str(fd, "name") ?? "Untitled Campaign",
     type: str(fd, "type") ?? "Other",
-    partnerId: num(fd, "partnerId"),
     accountId: num(fd, "accountId"),
     startDate: str(fd, "startDate"),
     endDate: str(fd, "endDate"),
@@ -832,7 +742,6 @@ function eventValues(fd: FormData) {
     contactId: num(fd, "contactId"),
     opportunityId: num(fd, "opportunityId"),
     campaignId: num(fd, "campaignId"),
-    partnerId: num(fd, "partnerId"),
     clinicLocationId: num(fd, "clinicLocationId"),
     locationText: str(fd, "locationText"),
     startsAt: str(fd, "startsAt"),
@@ -907,7 +816,6 @@ function leadValues(fd: FormData) {
     source: str(fd, "source"),
     campaignId: num(fd, "campaignId"),
     eventId: num(fd, "eventId"),
-    partnerId: num(fd, "partnerId"),
     accountId: num(fd, "accountId"),
     interestLevel: str(fd, "interestLevel") ?? "Unknown",
     apptStatus: str(fd, "apptStatus") ?? "Not Contacted",
@@ -1078,7 +986,6 @@ function apptValues(fd: FormData) {
     source: str(fd, "source"),
     eventId: num(fd, "eventId"),
     campaignId: num(fd, "campaignId"),
-    partnerId: num(fd, "partnerId"),
     accountId: num(fd, "accountId"),
     locationId: num(fd, "locationId"),
     scheduledAt: str(fd, "scheduledAt"),
@@ -1399,7 +1306,6 @@ export async function changeEventStatus(fd: FormData) {
     contactId: event!.contactId,
     eventId: id,
     campaignId: event!.campaignId,
-    partnerId: event!.partnerId,
     occurredAt: nowISO(),
     notes: `${event!.name}: status changed from ${event!.status} to ${status}.`,
     // History only — visible on the record, counted in no metric. Flipping a
@@ -1534,7 +1440,8 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
       { table: s.agentActivities, col: s.agentActivities.accountId, field: "accountId", label: "agent audit entries" },
     ],
     // partners.accountId and account_tags.accountId are NOT NULL — they cannot
-    // be detached, so they go with the business.
+    // be detached, so they go with the business. (The partners table is
+    // retired; the line stays so a leftover row can never block a delete.)
     remove: [
       { table: s.partners, col: s.partners.accountId, field: "accountId", label: "partner record" },
       { table: s.accountTags, col: s.accountTags.accountId, field: "accountId", label: "tag links" },
@@ -1591,15 +1498,6 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
     ],
     remove: [],
   },
-  partner: {
-    detach: [
-      { table: s.events, col: s.events.partnerId, field: "partnerId", label: "events" },
-      { table: s.activities, col: s.activities.partnerId, field: "partnerId", label: "activities" },
-      { table: s.leads, col: s.leads.partnerId, field: "partnerId", label: "leads" },
-      { table: s.appointments, col: s.appointments.partnerId, field: "partnerId", label: "appointments" },
-    ],
-    remove: [],
-  },
   project: {
     detach: [
       { table: s.activities, col: s.activities.projectId, field: "projectId", label: "activities" },
@@ -1612,7 +1510,7 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
 
 const MAIN_TABLE: Record<string, SQLiteTable & { id: SQLiteColumn; cityId: SQLiteColumn }> = {
   account: s.accounts, contact: s.contacts, lead: s.leads, opportunity: s.opportunities,
-  event: s.events, campaign: s.campaigns, partner: s.partners, project: s.projects,
+  event: s.events, campaign: s.campaigns, project: s.projects,
 };
 
 /** What deleting this record would touch — powers the confirmation screen. */
@@ -1653,7 +1551,7 @@ export async function deleteRecord(fd: FormData) {
 
 const LIST_PATH: Record<string, string> = {
   account: "/accounts", contact: "/contacts", lead: "/leads", opportunity: "/opportunities",
-  event: "/events", campaign: "/campaigns", partner: "/partners", project: "/projects",
+  event: "/events", campaign: "/campaigns", project: "/projects",
 };
 
 // =============== CSV import (accounts & contacts) ===============

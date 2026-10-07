@@ -10,17 +10,14 @@ type Lead = typeof schema.leads.$inferSelect;
 export default async function LeadForm({ action, lead, defaults, addAnotherQS }: {
   action: (fd: FormData) => Promise<void>;
   lead?: Lead;
-  defaults?: { campaignId?: number; eventId?: number; partnerId?: number; accountId?: number; source?: string };
+  defaults?: { campaignId?: number; eventId?: number; accountId?: number; source?: string };
   /** when set, shows a "save & add another" toggle that returns to the prefilled form */
   addAnotherQS?: string;
 }) {
-  const [accounts, campaigns, events, partners, locations] = await Promise.all([
+  const [accounts, campaigns, events, locations] = await Promise.all([
     db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] }),
     db.query.campaigns.findMany({ where: await cityWhere(s.campaigns.cityId) }),
     db.query.events.findMany({ where: await cityWhere(s.events.cityId), orderBy: (e, { desc }) => [desc(e.startsAt)] }),
-    db.select({ id: s.partners.id, name: s.accounts.name })
-      .from(s.partners).innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
-      .where(await cityWhere(s.partners.cityId)),
     db.query.locations.findMany({ where: await cityWhere(s.locations.cityId, eq(s.locations.active, true)) }),
   ]);
   const l = lead;
@@ -55,12 +52,6 @@ export default async function LeadForm({ action, lead, defaults, addAnotherQS }:
             <select name="eventId" defaultValue={l?.eventId ?? d?.eventId ?? ""} className={selectCls}>
               <option value="">—</option>
               {events.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Source partner">
-            <select name="partnerId" defaultValue={l?.partnerId ?? d?.partnerId ?? ""} className={selectCls}>
-              <option value="">—</option>
-              {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Field>
           <Field label="Associated business">

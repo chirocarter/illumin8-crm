@@ -11,14 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function LogActivityPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   // The wizard only ever offers records from the city you're working in.
-  const [accounts, contacts, leads, opportunities, events, campaigns, partners, locations, projects] = await Promise.all([
+  const [accounts, contacts, leads, opportunities, events, campaigns, locations, projects] = await Promise.all([
     db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] }),
     db.query.contacts.findMany({ where: await cityWhere(s.contacts.cityId), orderBy: (c, { asc }) => [asc(c.firstName)] }),
     db.query.leads.findMany({ where: await cityWhere(s.leads.cityId), orderBy: (l, { desc }) => [desc(l.createdAt)], limit: 500 }),
     db.query.opportunities.findMany({ where: await cityWhere(s.opportunities.cityId), orderBy: (o, { desc }) => [desc(o.createdAt)] }),
     db.query.events.findMany({ where: await cityWhere(s.events.cityId), orderBy: (e, { desc }) => [desc(e.startsAt)], limit: 40 }),
     db.query.campaigns.findMany({ where: await cityWhere(s.campaigns.cityId) }),
-    db.query.partners.findMany({ where: await cityWhere(s.partners.cityId) }),
     db.query.locations.findMany({ where: await cityWhere(s.locations.cityId, eq(s.locations.active, true)) }),
     db.query.projects.findMany({ where: await cityWhere(s.projects.cityId), orderBy: (p, { desc }) => [desc(p.createdAt)] }),
   ]);
@@ -44,12 +43,11 @@ export default async function LogActivityPage({ searchParams }: { searchParams: 
         accountId: e.accountId, startsAt: e.startsAt, type: e.type,
       }))}
       campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
-      partners={partners.map((p) => ({ id: p.id, accountId: p.accountId }))}
       locations={locations.map((l) => ({ id: l.id, name: l.name }))}
       projects={projects.map((p) => ({ id: p.id, name: p.name }))}
       prefill={{
         accountId: n("accountId"), contactId: n("contactId"), leadId: n("leadId"), opportunityId: n("opportunityId"),
-        eventId: n("eventId"), partnerId: n("partnerId"), campaignId: n("campaignId"), projectId: n("projectId"),
+        eventId: n("eventId"), campaignId: n("campaignId"), projectId: n("projectId"),
         returnTo: spStr(sp, "returnTo"), type: spStr(sp, "type"), taskId: n("taskId"),
       }}
     />

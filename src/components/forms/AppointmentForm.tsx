@@ -10,18 +10,15 @@ type Appointment = typeof schema.appointments.$inferSelect;
 export default async function AppointmentForm({ action, appointment, defaults }: {
   action: (fd: FormData) => Promise<void>;
   appointment?: Appointment;
-  defaults?: Partial<Record<"leadId" | "eventId" | "campaignId" | "partnerId" | "accountId" | "locationId", number>> & { source?: string };
+  defaults?: Partial<Record<"leadId" | "eventId" | "campaignId" | "accountId" | "locationId", number>> & { source?: string };
 }) {
   // Every picker offers only the city you're working in.
-  const [leads, contacts, accounts, campaigns, events, partners, locations] = await Promise.all([
+  const [leads, contacts, accounts, campaigns, events, locations] = await Promise.all([
     db.query.leads.findMany({ where: await cityWhere(s.leads.cityId), orderBy: (l, { desc }) => [desc(l.createdAt)] }),
     db.query.contacts.findMany({ where: await cityWhere(s.contacts.cityId), orderBy: (c, { asc }) => [asc(c.firstName)] }),
     db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] }),
     db.query.campaigns.findMany({ where: await cityWhere(s.campaigns.cityId) }),
     db.query.events.findMany({ where: await cityWhere(s.events.cityId), orderBy: (e, { desc }) => [desc(e.startsAt)] }),
-    db.select({ id: s.partners.id, name: s.accounts.name })
-      .from(s.partners).innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
-      .where(await cityWhere(s.partners.cityId)),
     db.query.locations.findMany({ where: await cityWhere(s.locations.cityId, eq(s.locations.active, true)) }),
   ]);
   const a = appointment;
@@ -78,12 +75,6 @@ export default async function AppointmentForm({ action, appointment, defaults }:
             <select name="campaignId" defaultValue={a?.campaignId ?? d?.campaignId ?? ""} className={selectCls}>
               <option value="">—</option>
               {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Source partner">
-            <select name="partnerId" defaultValue={a?.partnerId ?? d?.partnerId ?? ""} className={selectCls}>
-              <option value="">—</option>
-              {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Field>
           <Field label="Source business">

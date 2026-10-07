@@ -1,19 +1,18 @@
-// Current partners: every business whose ACCOUNT STATUS is "Active Partner".
-//
-// The account status is the definition, not the partners table. A partner
-// record holds drop box and benefit details, but it can exist for a business
-// that's only a candidate, and a business can be made an Active Partner without
-// one — so listing partner records showed some non-partners and missed some
-// real ones.
+// Current partners: every business whose status is Active Partner. A partner
+// is a business, not a separate record — this page, the Partner Report and the
+// status on the business all mean the same thing.
 //
 // One large card per partner: the name, and the to-dos still open for it.
 import Link from "next/link";
 import { db, schema as s } from "@/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { PageHeader, Card, BtnLink, EmptyState } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { fmtDate, fmtDateLong, todayISO } from "@/lib/dates";
 import { cityWhere } from "@/lib/scope";
+import { ACTIVE_PARTNER, PAST_PARTNER } from "@/lib/taxonomy";
+
+const NEW_PARTNER_HREF = `/accounts/new?status=${encodeURIComponent(ACTIVE_PARTNER)}`;
 
 export const metadata = { title: "Partners" };
 export const dynamic = "force-dynamic";
@@ -28,8 +27,10 @@ export default async function PartnersPage() {
       area: s.accounts.area, partnerSince: s.accounts.partnerSince,
     })
     .from(s.accounts)
-    .where(await cityWhere(s.accounts.cityId, eq(s.accounts.status, "Active Partner")))
+    .where(await cityWhere(s.accounts.cityId, eq(s.accounts.status, ACTIVE_PARTNER)))
     .orderBy(sql`${s.accounts.name} collate nocase`);
+  const [{ n: pastCount }] = await db.select({ n: count() }).from(s.accounts)
+    .where(await cityWhere(s.accounts.cityId, eq(s.accounts.status, PAST_PARTNER)));
 
   // Open tasks on these businesses: the same set the account page lists under
   // Open Tasks, so the two never disagree.
@@ -63,14 +64,25 @@ export default async function PartnersPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title="Partners"
-        subtitle={`${partners.length} active partner${partners.length === 1 ? "" : "s"}`}
-        actions={<BtnLink href="/partners/new"><Icon name="plus" className="h-4 w-4" /> New Partner</BtnLink>} />
+        subtitle={<>
+          {partners.length} active partner{partners.length === 1 ? "" : "s"}
+          {pastCount > 0 && <>
+            {" · "}
+            <Link href={`/accounts?status=${encodeURIComponent(PAST_PARTNER)}`} className="underline decoration-line underline-offset-4 hover:text-accent-deep">
+              {pastCount} past
+            </Link>
+          </>}
+        </>}
+        actions={<>
+          <BtnLink href="/reports/partners" variant="outline">Partner Report</BtnLink>
+          <BtnLink href={NEW_PARTNER_HREF}><Icon name="plus" className="h-4 w-4" /> New Partner</BtnLink>
+        </>} />
 
       {partners.length === 0 ? (
         <Card>
           <EmptyState icon="handshake" title="No active partners yet"
             hint="A business shows up here once its status is Active Partner."
-            action={<BtnLink href="/partners/new" variant="outline">Add a partner</BtnLink>} />
+            action={<BtnLink href={NEW_PARTNER_HREF} variant="outline">Add a partner</BtnLink>} />
         </Card>
       ) : (
         // Two across only on wide screens: beside the sidebar, two cards at

@@ -14,6 +14,7 @@ import { listScope, scopeConds } from "./scope";
 import { followUpCondition } from "./followups";
 import { meetingsOnly, outreachEventsOnly } from "./metrics";
 import { humanCountableEvents, AI_REVIEW_PENDING, AI_REVIEW_REJECTED } from "./ai-review";
+import { accountParam, appointmentViaAccount, eventViaAccount, leadViaAccount } from "./partners";
 
 export type SP = Record<string, string | string[] | undefined>;
 
@@ -213,7 +214,7 @@ export async function listActivities(sp: SP) {
   // Same derived rule the Follow-Ups Completed metric counts, so the number and
   // this list can never disagree.
   if (spStr(sp, "followups")) conds.push(followUpCondition());
-  for (const key of ["accountId", "contactId", "leadId", "opportunityId", "eventId", "partnerId", "campaignId", "projectId"] as const) {
+  for (const key of ["accountId", "contactId", "leadId", "opportunityId", "eventId", "campaignId", "projectId"] as const) {
     const v = spNum(sp, key);
     if (v) conds.push(eq(s.activities[key], v));
   }
@@ -322,10 +323,12 @@ export async function listEvents(sp: SP) {
   if (to) conds.push(lt(s.events.startsAt, up(to)));
   // Meetings and events are separate kinds and never counted together, so their
   // drill-downs have to split the same way or a number won't match its list.
+  // `outreach` asks for the events side on its own, for counts with no date
+  // range (the Partner Report's Events column).
   const meetingsView = !!spStr(sp, "meetings");
   if (meetingsView) {
     conds.push(meetingsOnly());
-  } else if (spStr(sp, "bookedFrom") || spStr(sp, "bookedTo") || spStr(sp, "heldFrom") || spStr(sp, "heldTo")) {
+  } else if (spStr(sp, "outreach") || spStr(sp, "bookedFrom") || spStr(sp, "bookedTo") || spStr(sp, "heldFrom") || spStr(sp, "heldTo")) {
     conds.push(outreachEventsOnly());
   }
   const bf = spStr(sp, "bookedFrom");
@@ -350,10 +353,13 @@ export async function listEvents(sp: SP) {
     conds.push(isNotNull(s.events.startsAt));
     conds.push(lt(s.events.startsAt, nowISO()));
   }
-  for (const key of ["accountId", "contactId", "opportunityId", "campaignId", "partnerId"] as const) {
+  for (const key of ["accountId", "contactId", "opportunityId", "campaignId"] as const) {
     const v = spNum(sp, key);
     if (v) conds.push(eq(s.events[key], v));
   }
+  // Everything a partner produced — the Partner Report's rule, see lib/partners.
+  const via = spNum(sp, "viaAccountId");
+  if (via) conds.push(eventViaAccount(accountParam(via)));
   const loc = spNum(sp, "locationId");
   if (loc) conds.push(eq(s.events.clinicLocationId, loc));
 
@@ -395,10 +401,12 @@ export async function listLeads(sp: SP) {
   if (apptStatus) conds.push(eq(s.leads.apptStatus, apptStatus));
   const interest = spStr(sp, "interest");
   if (interest) conds.push(eq(s.leads.interestLevel, interest));
-  for (const key of ["campaignId", "eventId", "partnerId", "accountId"] as const) {
+  for (const key of ["campaignId", "eventId", "accountId"] as const) {
     const v = spNum(sp, key);
     if (v) conds.push(eq(s.leads[key], v));
   }
+  const via = spNum(sp, "viaAccountId");
+  if (via) conds.push(leadViaAccount(accountParam(via)));
   const loc = spNum(sp, "locationId");
   if (loc) conds.push(eq(s.leads.preferredLocationId, loc));
 
@@ -442,10 +450,12 @@ export async function listAppointments(sp: SP) {
   const source = spStr(sp, "source");
   if (source) conds.push(eq(s.appointments.source, source));
   if (spStr(sp, "collected")) conds.push(eq(s.appointments.collected, true));
-  for (const key of ["eventId", "campaignId", "partnerId", "accountId", "leadId"] as const) {
+  for (const key of ["eventId", "campaignId", "accountId", "leadId"] as const) {
     const v = spNum(sp, key);
     if (v) conds.push(eq(s.appointments[key], v));
   }
+  const via = spNum(sp, "viaAccountId");
+  if (via) conds.push(appointmentViaAccount(accountParam(via)));
   const loc = spNum(sp, "locationId");
   if (loc) conds.push(eq(s.appointments.locationId, loc));
   // "none" is a real filter, not the absence of one: the New Patients by Office

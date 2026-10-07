@@ -1,34 +1,42 @@
-import { PageHeader, Card, CardHeader, DrillNumber, RecordLink, Badge } from "@/components/ui";
+import { PageHeader, Card, CardHeader, DrillNumber, RecordLink } from "@/components/ui";
 import { db, schema as s } from "@/db";
-import { and, eq, sql } from "drizzle-orm";
-import { fmtMoney } from "@/lib/dates";
-import { qs } from "@/lib/metrics";
+import { and, inArray, sql } from "drizzle-orm";
+import { fmtDateLong, fmtMoney } from "@/lib/dates";
+import { qs, outreachEventsOnly } from "@/lib/metrics";
 import { activeCity, scopeConds } from "@/lib/scope";
+import { humanCountableEvents } from "@/lib/ai-review";
+import { appointmentViaAccount, eventViaAccount, leadViaAccount } from "@/lib/partners";
+import { ACTIVE_PARTNER, PAST_PARTNER } from "@/lib/taxonomy";
 
 export const metadata = { title: "Partner Report" };
 export const dynamic = "force-dynamic";
 
+// A partner is a business whose status is Active Partner or Past Partner — the
+// same businesses as the Partners page, plus the ones whose partnership ended.
+// What counts as "produced by" a partner is defined once in lib/partners, and
+// every number below opens a list filtered by that same rule.
+const acct = sql`accounts.id`;
+
 export default async function PartnerReport() {
-  // Pinned to the active city — partners and campaigns from the other market
+  // Pinned to the active city — another market's partners and campaigns
   // don't belong in this city's workflow view.
   const city = (await activeCity())?.id ?? null;
 
   const partners = await db
     .select({
-      id: s.partners.id, type: s.partners.partnerType, status: s.partners.status,
-      name: s.accounts.name, cards: s.partners.cardsCollected, spent: s.partners.revenueSpent,
-      // Outer column written out in full — a bare interpolated "id" would bind
-      // to the subquery's own table and return wrong counts.
-      leads: sql<number>`(select count(*) from leads where leads.partner_id = partners.id)`,
-      events: sql<number>`(select count(*) from events where events.partner_id = partners.id)`,
-      appts: sql<number>`(select count(*) from appointments where appointments.partner_id = partners.id)`,
-      showed: sql<number>`(select count(*) from appointments where appointments.partner_id = partners.id and appointments.status = 'Showed')`,
-      charged: sql<number>`(select coalesce(sum(appointments.revenue),0) from appointments where appointments.partner_id = partners.id)`,
-      collected: sql<number>`(select coalesce(sum(case when appointments.collected then appointments.revenue else 0 end),0) from appointments where appointments.partner_id = partners.id)`,
+      id: s.accounts.id, name: s.accounts.name, status: s.accounts.status,
+      vertical: s.accounts.vertical, partnerSince: s.accounts.partnerSince,
+      leads: sql<number>`(select count(*) from leads where ${leadViaAccount(acct)})`,
+      // Outreach events only, and only ones a person has accepted: a meeting
+      // is not an event, and an AI suggestion is not a booking.
+      events: sql<number>`(select count(*) from events where ${eventViaAccount(acct)} and ${humanCountableEvents()} and ${outreachEventsOnly()})`,
+      appts: sql<number>`(select count(*) from appointments where ${appointmentViaAccount(acct)})`,
+      showed: sql<number>`(select count(*) from appointments where ${appointmentViaAccount(acct)} and appointments.status = 'Showed')`,
+      charged: sql<number>`(select coalesce(sum(appointments.revenue), 0) from appointments where ${appointmentViaAccount(acct)})`,
+      collected: sql<number>`(select coalesce(sum(case when appointments.collected then appointments.revenue else 0 end), 0) from appointments where ${appointmentViaAccount(acct)})`,
     })
-    .from(s.partners)
-    .innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
-    .where(and(...scopeConds(s.partners, { cityId: city })));
+    .from(s.accounts)
+    .where(and(inArray(s.accounts.status, [ACTIVE_PARTNER, PAST_PARTNER]), ...scopeConds(s.accounts, { cityId: city })));
 
   const campaigns = await db
     .select({
@@ -40,34 +48,44 @@ export default async function PartnerReport() {
     .from(s.campaigns)
     .where(and(...scopeConds(s.campaigns, { cityId: city })));
 
-  const sorted = [...partners].sort((a, b) => Number(b.appts) - Number(a.appts));
+  // Most appointments first, then most leads, then A→Z so ties don't shuffle.
+  const sorted = [...partners].sort((a, b) =>
+    Number(b.appts) - Number(a.appts) || Number(b.leads) - Number(a.leads) || a.name.localeCompare(b.name));
+  const active = sorted.filter((p) => p.status === ACTIVE_PARTNER);
+  const past = sorted.filter((p) => p.status === PAST_PARTNER);
   const bestCampaigns = [...campaigns].sort((a, b) => Number(b.leads) - Number(a.leads));
 
-  const section = (title: string, rows: typeof sorted) => (
+  const section = (id: string, title: string, rows: typeof sorted, empty: string) => (
     <Card className="mt-5">
-      <CardHeader title={title} />
-      {rows.length === 0 ? <p className="px-5 pb-4 text-sm text-faint">None yet.</p> : (
+      <div id={id} className="scroll-mt-20">
+        <CardHeader title={`${title} · ${rows.length}`} />
+      </div>
+      {rows.length === 0 ? <p className="px-5 pb-4 text-sm text-faint">{empty}</p> : (
         <div className="overflow-x-auto">
           <table className="tbl">
             <thead><tr>
-              <th>Partner</th><th>Status</th><th className="text-right">Leads</th><th className="text-right">Events</th>
+              <th className="min-w-[11rem]">Partner</th><th className="text-right">Leads</th><th className="text-right">Events</th>
               <th className="text-right">Appointments</th><th className="text-right">Showed</th>
               <th className="text-right">Charged</th><th className="text-right">Collected</th>
             </tr></thead>
             <tbody>
-              {rows.map((p) => (
-                <tr key={p.id}>
-                  <td><RecordLink href={`/partners/${p.id}`}>{p.name}</RecordLink>
-                    <span className="block text-xs text-faint">{p.type}</span></td>
-                  <td><Badge>{p.status}</Badge></td>
-                  <td className="text-right"><DrillNumber value={Number(p.leads)} href={`/leads${qs({ partnerId: p.id })}`} /></td>
-                  <td className="text-right"><DrillNumber value={Number(p.events)} href={`/events${qs({ partnerId: p.id })}`} /></td>
-                  <td className="text-right"><DrillNumber value={Number(p.appts)} href={`/appointments${qs({ partnerId: p.id })}`} /></td>
-                  <td className="text-right"><DrillNumber value={Number(p.showed)} href={`/appointments${qs({ partnerId: p.id, status: "Showed" })}`} /></td>
-                  <td className="text-right text-soft">{fmtMoney(Number(p.charged))}</td>
-                  <td className="text-right text-soft">{fmtMoney(Number(p.collected))}</td>
-                </tr>
-              ))}
+              {rows.map((p) => {
+                const via = { viaAccountId: p.id };
+                return (
+                  <tr key={p.id}>
+                    <td><RecordLink href={`/accounts/${p.id}`}>{p.name}</RecordLink>
+                      <span className="block text-xs text-faint">
+                        {[p.vertical, p.partnerSince ? `Partner since ${fmtDateLong(p.partnerSince)}` : null].filter(Boolean).join(" · ")}
+                      </span></td>
+                    <td className="text-right"><DrillNumber value={Number(p.leads)} href={`/leads${qs(via)}`} /></td>
+                    <td className="text-right"><DrillNumber value={Number(p.events)} href={`/events${qs({ ...via, outreach: "1" })}`} /></td>
+                    <td className="text-right"><DrillNumber value={Number(p.appts)} href={`/appointments${qs(via)}`} /></td>
+                    <td className="text-right"><DrillNumber value={Number(p.showed)} href={`/appointments${qs({ ...via, status: "Showed" })}`} /></td>
+                    <td className="text-right"><DrillNumber value={fmtMoney(Number(p.charged))} href={`/appointments${qs(via)}`} /></td>
+                    <td className="text-right"><DrillNumber value={fmtMoney(Number(p.collected))} href={`/appointments${qs({ ...via, collected: "1" })}`} /></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -77,11 +95,16 @@ export default async function PartnerReport() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader title="Partner Report" subtitle="Which partnerships actually produce — sorted by appointments generated" />
+      <PageHeader title="Partner Report" subtitle="What each partnership produced, all time — sorted by appointments" />
 
-      {section("All Partners", sorted)}
-      {section("Restaurants", sorted.filter((p) => p.type === "Restaurant Partner"))}
-      {section("Gyms", sorted.filter((p) => p.type === "Gym Partner"))}
+      {section("active", "Active Partners", active, "No active partners in this city.")}
+      {section("past", "Past Partners", past,
+        "None yet. When a partnership ends, set the business to Past Partner and it moves here, numbers intact.")}
+
+      <p className="mt-3 px-1 text-xs text-faint">
+        A lead, event or appointment counts for a partner when it&rsquo;s linked to the business, came through
+        one of its campaigns, or came from an event it hosted. Events exclude meetings.
+      </p>
 
       <Card className="mt-5">
         <CardHeader title="Best-Performing Campaigns" />

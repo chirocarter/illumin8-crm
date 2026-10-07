@@ -19,7 +19,7 @@ export default async function NewEventPage({ searchParams }: { searchParams: Pro
       <EventForm action={createEvent}
         defaults={{
           accountId: n("accountId"), contactId: n("contactId"), opportunityId: n("opportunityId"),
-          partnerId: n("partnerId"), campaignId: n("campaignId"),
+          campaignId: n("campaignId"),
           // ?startsAt=YYYY-MM-DDTHH:mm and ?type= — set when adding from a calendar day
           startsAt: spStr(sp, "startsAt"),
           type: spStr(sp, "type"),

@@ -10,9 +10,16 @@ export const AREAS = ["NE Heights", "Westside", "Downtown", "Rio Rancho", "Other
 
 export const ACCOUNT_STATUSES = [
   "New Prospect", "Researched", "Contacted", "Follow-Up Needed", "Interested",
-  "Partner Candidate", "Active Partner", "Event Booked", "Event Completed",
+  "Partner Candidate", "Active Partner", "Past Partner", "Event Booked", "Event Completed",
   "Converted", "Nurture", "Not a Fit", "Do Not Contact",
 ] as const;
+
+// A partner IS a business with one of these statuses — there is no separate
+// partner record. Active Partners make up the Partners page; both appear in the
+// Partner Report, so a partnership that ended can still be judged on what it
+// produced.
+export const ACTIVE_PARTNER = "Active Partner";
+export const PAST_PARTNER = "Past Partner";
 
 export const CONTACT_TYPES = [
   "Owner", "HR", "Manager", "Employee", "Gym Owner", "Dental Office Manager",
@@ -161,14 +168,6 @@ export function outcomesFor(type: string | null, forLead = false): readonly stri
 export const PARTNERSHIP_CONVO_OUTCOMES = [
   "Discussed Partnership", "Booked Event", "Closed / Converted",
 ] as const;
-
-export const PARTNER_TYPES = [
-  "Restaurant Partner", "Gym Partner", "Wellness Partner", "Business Partner",
-  "Event Partner", "Referral Partner",
-] as const;
-
-export const PARTNER_STATUSES = ["Prospective", "Active", "Paused", "Ended"] as const;
-export const DROP_BOX_STATUSES = ["Placed", "Needs Pickup", "Needs Restock", "Removed"] as const;
 
 export const CAMPAIGN_TYPES = [
   "Restaurant Drop Box", "Office Drop Box", "Gym Flyer", "Event Flyer",

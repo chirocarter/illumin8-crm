@@ -13,7 +13,7 @@ const TONES: Record<Tone, string> = {
 const STATUS_TONE: Record<string, Tone> = {
   // Accounts
   "New Prospect": "gray", Researched: "gray", Contacted: "blue", "Follow-Up Needed": "amber",
-  Interested: "blue", "Partner Candidate": "purple", "Active Partner": "green",
+  Interested: "blue", "Partner Candidate": "purple", "Active Partner": "green", "Past Partner": "gray",
   "Event Booked": "green", "Event Completed": "green", Converted: "green",
   Nurture: "gray", "Not a Fit": "red", "Do Not Contact": "red",
   // Opportunity stages
@@ -30,11 +30,9 @@ const STATUS_TONE: Record<string, Tone> = {
   // event on the calendar, or finally getting past the gatekeeper to the person
   // who can say yes. The rest stay neutral so the wins are what catch the eye.
   "Booked Meeting": "green", "Booked Event": "green", "Reached Decision Maker": "green",
-  // Partners / campaigns / tasks / projects
+  // Campaigns / tasks / projects
   Prospective: "gray", Active: "green", Paused: "amber", Ended: "red",
   Draft: "gray", Open: "blue", "On Hold": "amber", Archived: "gray",
-  // Drop box
-  Placed: "green", "Needs Pickup": "amber", "Needs Restock": "amber", Removed: "red",
   // Interest levels
   Hot: "red", Warm: "amber", Cool: "blue", Unknown: "gray",
   // Relationship

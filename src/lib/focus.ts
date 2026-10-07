@@ -2,7 +2,6 @@
 //   • Overdue tasks score highest, growing with days overdue
 //   • Open opportunities with due/overdue follow-ups, weighted by stage
 //   • Events happening in the next 3 days (prep) and event follow-ups due
-//   • Drop box pickups that are due
 //   • High-value verticals (gyms, dental, restaurants, wellness, corporate) get a boost
 import { db, schema as s } from "@/db";
 import { and, eq, inArray, isNotNull, lte } from "drizzle-orm";
@@ -15,14 +14,12 @@ export type FocusItem = {
   title: string;
   reason: string;
   href: string;
-  kind: "task" | "opportunity" | "event" | "pickup";
+  kind: "task" | "opportunity" | "event";
   /**
    * What "Done" clears, when the item is something you can finish.
    *
-   * Absent for the two kinds where it would destroy information rather than
-   * record it: an upcoming-event reminder isn't a to-do (it drops off after the
-   * date), and a drop box pickup has to capture how many cards you collected,
-   * so it sends you to the partner page instead.
+   * Absent where it would destroy information rather than record it: an
+   * upcoming-event reminder isn't a to-do (it drops off after the date).
    */
   done?: { target: "task" | "opportunityFollowUp" | "eventFollowUp"; id: number };
 };
@@ -134,24 +131,8 @@ export async function todaysFocus(limit = 8, scope: { cityId?: number | null; us
     });
   }
 
-  // 4. Drop box pickups due
   // (Appointments are deliberately NOT surfaced here — Showed/No-Show is
-  // tracked by the front desk, not the outreach role.)
-  const pickups = await db
-    .select({ id: s.partners.id, name: s.accounts.name, due: s.partners.nextPickupDueAt })
-    .from(s.partners)
-    .innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
-    .where(and(eq(s.partners.dropBoxActive, true), isNotNull(s.partners.nextPickupDueAt), lte(s.partners.nextPickupDueAt, today), ...mine(s.partners)));
-  for (const p of pickups) {
-    const overdueDays = p.due ? daysBetween(p.due, today) : 0;
-    items.push({
-      score: 48 + Math.min(overdueDays * 4, 20),
-      title: `Drop box pickup: ${p.name}`,
-      reason: overdueDays > 0 ? `Pickup ${overdueDays}d overdue` : "Pickup due today",
-      href: `/partners/${p.id}`,
-      kind: "pickup",
-    });
-  }
-
+  // tracked by the front desk, not the outreach role. A drop box pickup is a
+  // task like any other, so it arrives through the tasks above.)
   return items.sort((a, b) => b.score - a.score).slice(0, limit);
 }

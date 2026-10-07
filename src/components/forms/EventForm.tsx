@@ -12,21 +12,18 @@ export default async function EventForm({ action, event, defaults }: {
   event?: Event;
   defaults?: {
     accountId?: number; contactId?: number; opportunityId?: number;
-    partnerId?: number; campaignId?: number;
+    campaignId?: number;
     /** "YYYY-MM-DDTHH:mm" — prefilled when adding from a calendar day */
     startsAt?: string;
     /** preselects the event type, e.g. "Meeting" from the calendar's + Meeting */
     type?: string;
   };
 }) {
-  const [accounts, contacts, opportunities, campaigns, partners, locations] = await Promise.all([
+  const [accounts, contacts, opportunities, campaigns, locations] = await Promise.all([
     db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] }),
     db.query.contacts.findMany({ where: await cityWhere(s.contacts.cityId), orderBy: (c, { asc }) => [asc(c.firstName)] }),
     db.query.opportunities.findMany({ where: await cityWhere(s.opportunities.cityId), orderBy: (o, { desc }) => [desc(o.createdAt)] }),
     db.query.campaigns.findMany({ where: await cityWhere(s.campaigns.cityId) }),
-    db.select({ id: s.partners.id, name: s.accounts.name })
-      .from(s.partners).innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
-      .where(await cityWhere(s.partners.cityId)),
     db.query.locations.findMany({ where: await cityWhere(s.locations.cityId, eq(s.locations.active, true)) }),
   ]);
   const e = event;
@@ -82,12 +79,6 @@ export default async function EventForm({ action, event, defaults }: {
             <select name="campaignId" defaultValue={e?.campaignId ?? d?.campaignId ?? ""} className={selectCls}>
               <option value="">—</option>
               {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Partner">
-            <select name="partnerId" defaultValue={e?.partnerId ?? d?.partnerId ?? ""} className={selectCls}>
-              <option value="">—</option>
-              {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Field>
           <Field label="Illumin8 location">

@@ -6,7 +6,7 @@ import { db, schema as s } from "@/db";
 import { authorize } from "@/lib/scope";
 import { and, count, desc, eq, sum, sql } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, LinkableMetric, EmptyState } from "@/components/ui";
-import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/dates";
+import { fmtDate, fmtDateLong, fmtDateTime, fmtMoney } from "@/lib/dates";
 import { qs } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +63,7 @@ export default async function AccountDetail({ params, searchParams }: {
       })
     : null;
 
-  const [contacts, opportunities, events, leads, appointments, activities, tasks, campaigns, partner, location, tagRows, activityCount, apptStats] =
+  const [contacts, opportunities, events, leads, appointments, activities, tasks, campaigns, location, tagRows, activityCount, apptStats] =
     await Promise.all([
       db.query.contacts.findMany({ where: eq(s.contacts.accountId, id) }),
       db.query.opportunities.findMany({ where: eq(s.opportunities.accountId, id), orderBy: [desc(s.opportunities.createdAt)] }),
@@ -73,7 +73,6 @@ export default async function AccountDetail({ params, searchParams }: {
       db.query.activities.findMany({ where: eq(s.activities.accountId, id), orderBy: [desc(s.activities.occurredAt)], limit: 15 }),
       db.query.tasks.findMany({ where: and(eq(s.tasks.accountId, id), eq(s.tasks.status, "Open")), orderBy: [s.tasks.dueDate] }),
       db.query.campaigns.findMany({ where: eq(s.campaigns.accountId, id) }),
-      db.query.partners.findFirst({ where: eq(s.partners.accountId, id) }),
       account.clinicLocationId ? db.query.locations.findFirst({ where: eq(s.locations.id, account.clinicLocationId) }) : null,
       db.select({ name: s.tags.name }).from(s.accountTags).innerJoin(s.tags, eq(s.accountTags.tagId, s.tags.id)).where(eq(s.accountTags.accountId, id)),
       db.select({ c: count() }).from(s.activities).where(eq(s.activities.accountId, id)),
@@ -94,6 +93,8 @@ export default async function AccountDetail({ params, searchParams }: {
     ["Address", account.address ?? "—"],
     ["Owner / contact", account.ownerName ?? "—"],
     ["Source", account.source ?? "—"],
+    // Kept after a partnership ends, so a Past Partner still says when it began.
+    ...(account.partnerSince ? [["Partner since", fmtDateLong(account.partnerSince)] as [string, React.ReactNode]] : []),
     ["Partnership potential", "★".repeat(account.partnershipScore) + "☆".repeat(5 - account.partnershipScore)],
     ["Event potential", "★".repeat(account.eventScore) + "☆".repeat(5 - account.eventScore)],
     ["Added", fmtDate(account.createdAt)],
@@ -289,17 +290,11 @@ export default async function AccountDetail({ params, searchParams }: {
             )}
           </Card>
 
-          {/* Partner + campaigns */}
-          {(partner || campaigns.length > 0) && (
+          {/* Campaigns */}
+          {campaigns.length > 0 && (
             <Card>
-              <CardHeader title="Partnership & Campaigns" />
+              <CardHeader title="Campaigns" />
               <ul className="px-2 pb-2">
-                {partner && (
-                  <li><Link href={`/partners/${partner.id}`} className="block rounded-xl px-3 py-2 transition-colors hover:bg-hairline">
-                    <span className="flex items-center justify-between text-sm font-medium">{partner.partnerType}<Badge>{partner.status}</Badge></span>
-                    {partner.dropBoxActive && <span className="text-xs text-soft">Drop box: {partner.dropBoxStatus ?? "Active"}</span>}
-                  </Link></li>
-                )}
                 {campaigns.map((c) => (
                   <li key={c.id}><Link href={`/campaigns/${c.id}`} className="block rounded-xl px-3 py-2 transition-colors hover:bg-hairline">
                     <span className="flex items-center justify-between text-sm font-medium">{c.name}<Badge>{c.status}</Badge></span>

@@ -1,7 +1,6 @@
 import { Card, Field, inputCls, selectCls, Btn } from "@/components/ui";
 import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES, PUBLIC_FORM_TYPES, normalizePublicForm } from "@/lib/taxonomy";
 import { db, schema as s } from "@/db";
-import { eq } from "drizzle-orm";
 import { cityWhere } from "@/lib/scope";
 import type { schema } from "@/db";
 
@@ -10,14 +9,9 @@ type Campaign = typeof schema.campaigns.$inferSelect;
 export default async function CampaignForm({ action, campaign, defaults }: {
   action: (fd: FormData) => Promise<void>;
   campaign?: Campaign;
-  defaults?: { partnerId?: number; accountId?: number };
+  defaults?: { accountId?: number };
 }) {
-  const [accounts, partners] = await Promise.all([
-    db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] }),
-    db.select({ id: s.partners.id, name: s.accounts.name })
-      .from(s.partners).innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
-      .where(await cityWhere(s.partners.cityId)),
-  ]);
+  const accounts = await db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] });
   const c = campaign;
 
   return (
@@ -36,12 +30,6 @@ export default async function CampaignForm({ action, campaign, defaults }: {
           <Field label="Status">
             <select name="status" defaultValue={c?.status ?? "Active"} className={selectCls}>
               {CAMPAIGN_STATUSES.map((v) => <option key={v}>{v}</option>)}
-            </select>
-          </Field>
-          <Field label="Partner">
-            <select name="partnerId" defaultValue={c?.partnerId ?? defaults?.partnerId ?? ""} className={selectCls}>
-              <option value="">—</option>
-              {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Field>
           <Field label="Account / business">

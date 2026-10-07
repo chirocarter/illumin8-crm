@@ -17,7 +17,7 @@ export default async function NewAppointmentPage({ searchParams }: { searchParam
     <div className="mx-auto max-w-3xl">
       <PageHeader title="New Appointment" subtitle="Outreach attribution only — the clinic's scheduler stays the source of truth" />
       <AppointmentForm action={createAppointment}
-        defaults={{ leadId: n("leadId"), eventId: n("eventId"), campaignId: n("campaignId"), partnerId: n("partnerId"), accountId: n("accountId"), locationId: n("locationId"), source: spStr(sp, "source") }} />
+        defaults={{ leadId: n("leadId"), eventId: n("eventId"), campaignId: n("campaignId"), accountId: n("accountId"), locationId: n("locationId"), source: spStr(sp, "source") }} />
     </div>
   );
 }

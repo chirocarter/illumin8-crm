@@ -40,8 +40,12 @@ export type PipelineCard = {
   lastContactedAt: string | null;
 };
 
-/** Statuses that mean "stop working this" — kept off the board entirely. */
-const CLOSED_STATUSES = ["Not a Fit", "Do Not Contact"];
+/**
+ * Statuses that mean "stop working this" — kept off the board entirely.
+ * A Past Partner is a relationship that ended, not one in play; moving it back
+ * to any working status puts it on the board again.
+ */
+const CLOSED_STATUSES = ["Not a Fit", "Do Not Contact", "Past Partner"];
 
 /** Outcomes that show real interest, in ascending order of commitment. */
 const INTEREST_OUTCOMES = ["Interested", "Discussed Partnership", "Needs Materials", "Reached Decision Maker"];

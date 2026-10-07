@@ -13,11 +13,11 @@ import {
 import type { SP } from "@/lib/lists";
 import { spStr } from "@/lib/lists";
 
-type Kind = "account" | "contact" | "lead" | "opportunity" | "event" | "campaign" | "partner" | "project";
+type Kind = "account" | "contact" | "lead" | "opportunity" | "event" | "campaign" | "project";
 
 const NOUN: Record<Kind, string> = {
   account: "business", contact: "contact", lead: "lead", opportunity: "opportunity",
-  event: "event", campaign: "campaign", partner: "partner", project: "project",
+  event: "event", campaign: "campaign", project: "project",
 };
 
 export default async function RecordActions({ kind, id, name, sp, returnTo }: {

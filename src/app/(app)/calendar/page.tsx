@@ -22,7 +22,7 @@ type Item = {
   sort: string;
   label: string;
   href: string;
-  kind: "event" | "meeting" | "appointment" | "task" | "pickup";
+  kind: "event" | "meeting" | "appointment" | "task";
 };
 
 const KIND_STYLE: Record<Item["kind"], string> = {
@@ -30,12 +30,11 @@ const KIND_STYLE: Record<Item["kind"], string> = {
   meeting: "bg-good-soft text-good",
   appointment: "bg-info-soft text-info",
   task: "bg-hairline text-soft",
-  pickup: "bg-warn-soft text-accent-deep",
 };
 
 const KIND_LABEL: Record<Item["kind"], string> = {
   event: "Events", meeting: "Meetings & time off", appointment: "Appointments",
-  task: "Tasks & calls", pickup: "Drop box pickups",
+  task: "Tasks & calls",
 };
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
@@ -100,15 +99,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     : `/calendar?v=${view}&d=${addDays(first, step)}`;
 
   // The calendar shows the city you're working in — nothing from the other market.
-  const [events, appointments, tasks, pickups] = await Promise.all([
+  const [events, appointments, tasks] = await Promise.all([
     // humanCountableEvents(): an AI candidate awaiting review must not look
     // like a commitment on Carter's calendar. Approved ones appear normally.
     db.query.events.findMany({ where: await cityWhere(s.events.cityId, humanCountableEvents(), isNotNull(s.events.startsAt), gte(s.events.startsAt, first), lt(s.events.startsAt, upper)) }),
     db.query.appointments.findMany({ where: await cityWhere(s.appointments.cityId, isNotNull(s.appointments.scheduledAt), gte(s.appointments.scheduledAt, first), lt(s.appointments.scheduledAt, upper)) }),
     db.query.tasks.findMany({ where: await cityWhere(s.tasks.cityId, eq(s.tasks.status, "Open"), isNotNull(s.tasks.dueDate), gte(s.tasks.dueDate, first), lt(s.tasks.dueDate, upper)) }),
-    db.select({ id: s.partners.id, name: s.accounts.name, due: s.partners.nextPickupDueAt })
-      .from(s.partners).innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id))
-      .where(await cityWhere(s.partners.cityId, eq(s.partners.dropBoxActive, true), isNotNull(s.partners.nextPickupDueAt), gte(s.partners.nextPickupDueAt, first), lt(s.partners.nextPickupDueAt, upper))),
   ]);
 
   const items: Item[] = [
@@ -130,10 +126,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     ...tasks.map((t): Item => ({
       day: t.dueDate!.slice(0, 10), time: null, endTime: null, sort: t.dueDate! + "T00",
       label: t.title, href: `/tasks/${t.id}?from=calendar`, kind: "task",
-    })),
-    ...pickups.map((p): Item => ({
-      day: p.due!.slice(0, 10), time: null, endTime: null, sort: p.due! + "T01",
-      label: `Pickup: ${p.name}`, href: `/partners/${p.id}`, kind: "pickup",
     })),
   ].sort((a, b) => a.sort.localeCompare(b.sort));
 
@@ -192,7 +184,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title="Calendar"
-        subtitle="Events, appointments, follow-up tasks, and drop box pickups in one place"
+        subtitle="Events, appointments and follow-up tasks in one place"
         actions={addButtons(view === "month" ? today : anchor)} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">

@@ -8,7 +8,7 @@ const REPORTS = [
   { href: "/reports/activity", icon: "bolt", title: "Weekly Activity", desc: "What you did: contacts, visits, calls, follow-ups, drop box runs, events booked & held." },
   { href: "/reports/outcomes", icon: "sparkle", title: "Weekly Outcomes", desc: "What it produced: leads, screenings, appointments, show rate, revenue, conversion." },
   { href: "/reports/pipeline", icon: "pipeline", title: "Pipeline", desc: "Opportunities by stage, type, vertical, and location — plus stale deals and likely bookings." },
-  { href: "/reports/partners", icon: "handshake", title: "Partners", desc: "Leads, events, and appointments by partner. Which restaurants and gyms actually produce." },
+  { href: "/reports/partners", icon: "handshake", title: "Partners", desc: "Leads, events, appointments and money by partner — active and past. Which partnerships actually produce." },
   { href: "/reports/locations", icon: "building", title: "Locations", desc: "Performance by NE Heights, Westside, Downtown, Rio Rancho, and other areas." },
   { href: "/reports/sources", icon: "megaphone", title: "Source Attribution", desc: "Where results come from: drop boxes, gym events, lunch-and-learns, referrals, and more." },
   { href: "/reports/goals", icon: "chart", title: "Goal Progress", desc: "Weekly targets vs. actuals — 50 contacts, 6 events, 18 appointments, and yours to edit." },

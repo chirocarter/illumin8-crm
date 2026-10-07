@@ -143,7 +143,7 @@ export const campaigns = sqliteTable("campaigns", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   type: text("type").notNull().default("Other"),
-  partnerId: integer("partner_id"),
+  partnerId: integer("partner_id"), // retired — see `partners`
   accountId: integer("account_id").references(() => accounts.id),
   startDate: text("start_date"),
   endDate: text("end_date"),
@@ -160,6 +160,16 @@ export const campaigns = sqliteTable("campaigns", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
 });
 
+/**
+ * RETIRED — nothing in the app reads or writes this table any more.
+ *
+ * A partner is a business: an account whose status is Active Partner or Past
+ * Partner (see lib/taxonomy and lib/partners). This separate record duplicated
+ * that and drifted from it, and production never held a row. The table and the
+ * `partner_id` columns on campaigns, events, activities, leads and appointments
+ * stay only because dropping them needs table rebuilds that Turso's enforced
+ * foreign keys make risky, for no gain. Don't build on them.
+ */
 export const partners = sqliteTable("partners", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   accountId: integer("account_id").notNull().references(() => accounts.id),
@@ -212,7 +222,7 @@ export const events = sqliteTable("events", {
   contactId: integer("contact_id").references(() => contacts.id),
   opportunityId: integer("opportunity_id").references(() => opportunities.id),
   campaignId: integer("campaign_id").references(() => campaigns.id),
-  partnerId: integer("partner_id").references(() => partners.id),
+  partnerId: integer("partner_id").references(() => partners.id), // retired — see `partners`
   clinicLocationId: integer("clinic_location_id").references(() => locations.id),
   locationText: text("location_text"), // where the event physically happens
   startsAt: text("starts_at"),
@@ -302,7 +312,7 @@ export const activities = sqliteTable("activities", {
   leadId: integer("lead_id").references(() => leads.id), // for touches with leads (screenings, drop box cards) that have no business
   opportunityId: integer("opportunity_id").references(() => opportunities.id),
   eventId: integer("event_id").references(() => events.id),
-  partnerId: integer("partner_id").references(() => partners.id),
+  partnerId: integer("partner_id").references(() => partners.id), // retired — see `partners`
   campaignId: integer("campaign_id").references(() => campaigns.id),
   projectId: integer("project_id").references(() => projects.id),
   occurredAt: text("occurred_at").notNull().default(sql`(datetime('now','localtime'))`),
@@ -347,7 +357,7 @@ export const leads = sqliteTable("leads", {
   source: text("source"), // Drop Box | Event | QR Code | Referral | Walk-in | Other
   campaignId: integer("campaign_id").references(() => campaigns.id),
   eventId: integer("event_id").references(() => events.id),
-  partnerId: integer("partner_id").references(() => partners.id),
+  partnerId: integer("partner_id").references(() => partners.id), // retired — see `partners`
   accountId: integer("account_id").references(() => accounts.id),
   interestLevel: text("interest_level").notNull().default("Unknown"), // Hot | Warm | Cool | Unknown
   apptStatus: text("appt_status").notNull().default("Not Contacted"),
@@ -366,7 +376,7 @@ export const appointments = sqliteTable("appointments", {
   source: text("source"),
   eventId: integer("event_id").references(() => events.id),
   campaignId: integer("campaign_id").references(() => campaigns.id),
-  partnerId: integer("partner_id").references(() => partners.id),
+  partnerId: integer("partner_id").references(() => partners.id), // retired — see `partners`
   accountId: integer("account_id").references(() => accounts.id),
   locationId: integer("location_id").references(() => locations.id),
   scheduledAt: text("scheduled_at"),

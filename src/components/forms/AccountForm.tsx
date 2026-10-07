@@ -7,9 +7,11 @@ import type { schema } from "@/db";
 
 type Account = typeof schema.accounts.$inferSelect;
 
-export default async function AccountForm({ action, account }: {
+export default async function AccountForm({ action, account, defaultStatus }: {
   action: (fd: FormData) => Promise<void>;
   account?: Account;
+  /** Starting status for a new business — "New Partner" opens this at Active Partner. */
+  defaultStatus?: string;
 }) {
   const locations = await db.query.locations.findMany({ where: await cityWhere(s.locations.cityId, eq(s.locations.active, true)) });
   const a = account;
@@ -33,7 +35,7 @@ export default async function AccountForm({ action, account }: {
             </select>
           </Field>
           <Field label="Status">
-            <select name="status" defaultValue={a?.status ?? "New Prospect"} className={selectCls}>
+            <select name="status" defaultValue={a?.status ?? defaultStatus ?? "New Prospect"} className={selectCls}>
               {ACCOUNT_STATUSES.map((v) => <option key={v}>{v}</option>)}
             </select>
           </Field>

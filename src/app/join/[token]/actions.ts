@@ -129,7 +129,6 @@ export async function submitPublicLead(fd: FormData) {
     email: email || null,
     source: "QR Code",
     campaignId: campaign!.id,
-    partnerId: campaign!.partnerId,
     accountId,
     preferredLocationId: (() => {
       const n = Number(fd.get("preferredLocationId"));

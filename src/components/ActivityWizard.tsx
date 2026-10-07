@@ -8,7 +8,7 @@
 //        business → how many screened/attended → appts booked → add leads → notes
 //        (creates a completed Event + the leads + one appointment per booked appt)
 //   • dropbox  (Drop Box Visit):
-//        business → cards collected → notes  (rolls into the partner's card total)
+//        business → cards collected → notes  (the count is saved in the activity's notes)
 //   • note     (Note):
 //        who (optional) → notes
 import { useMemo, useState, useTransition } from "react";
@@ -33,11 +33,10 @@ type SlimEvent = {
   id: number; name: string; status: string;
   accountId: number | null; startsAt: string | null; type: string;
 };
-type SlimPartner = { id: number; accountId: number };
 
 type Prefill = Partial<{
   accountId: number; contactId: number; leadId: number; opportunityId: number; eventId: number;
-  partnerId: number; campaignId: number; projectId: number; returnTo: string; type: string;
+  campaignId: number; projectId: number; returnTo: string; type: string;
   /** The task whose "Log activity" button opened this — closed on save. */
   taskId: number;
 }>;
@@ -95,14 +94,13 @@ function Screen({ title, sub, children }: { title: string; sub?: string; childre
 
 type CapturedPerson = { name: string; phone: string; booked: boolean; apptDate: string; locationId: string; revenue: string; collected: boolean };
 
-export default function ActivityWizard({ accounts, contacts, leads, opportunities, events, campaigns, partners, locations, projects, prefill }: {
+export default function ActivityWizard({ accounts, contacts, leads, opportunities, events, campaigns, locations, projects, prefill }: {
   accounts: SlimAccount[];
   contacts: SlimContact[];
   leads: SlimLead[];
   opportunities: SlimOpp[];
   events: SlimEvent[];
   campaigns: Slim[];
-  partners: SlimPartner[];
   locations: Slim[];
   projects: Slim[];
   prefill: Prefill;
@@ -376,15 +374,11 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
       if (resultOpportunityId) fd.set("opportunityId", String(resultOpportunityId));
     }
 
-    // auto-attribute the partner when the business is one (or when launched prefilled)
-    const partnerId = prefill.partnerId ?? partners.find((p) => p.accountId === accountId)?.id;
-    if (partnerId) fd.set("partnerId", String(partnerId));
     fd.set("occurredAt", occurredAt.length === 16 ? occurredAt + ":00" : occurredAt);
 
-    // Drop box flow: card count rolls into the partner + is noted on the activity
+    // Drop box flow: the card count is recorded on the activity itself
     let noteText = notes.trim();
     if (flow === "dropbox" && cards) {
-      fd.set("dropCards", cards);
       noteText = `Collected ${cards} cards.${noteText ? " " + noteText : ""}`;
     }
     if (noteText) fd.set("notes", noteText);
@@ -964,7 +958,7 @@ export default function ActivityWizard({ accounts, contacts, leads, opportunitie
             <span className={fieldLabel}>How many cards did you collect?</span>
             <input type="number" min="0" inputMode="numeric" autoFocus value={cards}
               onChange={(e) => setCards(e.target.value)} placeholder="e.g. 12" className={inputBox} />
-            <span className="mt-1 block text-xs text-faint">Rolls into this partner&apos;s running card total and resets the pickup clock.</span>
+            <span className="mt-1 block text-xs text-faint">Saved with this visit, so every pickup&apos;s count stays on the business&apos;s timeline.</span>
           </label>
           <button className={continueBtn} onClick={() => go(orStanding("newcontacts"))}>Continue</button>
         </Screen>

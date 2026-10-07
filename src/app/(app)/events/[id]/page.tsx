@@ -23,21 +23,16 @@ export default async function EventDetail({ params, searchParams }: {
   const event = await authorize(await db.query.events.findFirst({ where: eq(s.events.id, id) }));
   if (!event) notFound();
 
-  const [account, contact, opportunity, campaign, partnerRow, leads, appointments, tasks, activities] = await Promise.all([
+  const [account, contact, opportunity, campaign, leads, appointments, tasks, activities] = await Promise.all([
     event.accountId ? db.query.accounts.findFirst({ where: eq(s.accounts.id, event.accountId) }) : null,
     event.contactId ? db.query.contacts.findFirst({ where: eq(s.contacts.id, event.contactId) }) : null,
     event.opportunityId ? db.query.opportunities.findFirst({ where: eq(s.opportunities.id, event.opportunityId) }) : null,
     event.campaignId ? db.query.campaigns.findFirst({ where: eq(s.campaigns.id, event.campaignId) }) : null,
-    event.partnerId
-      ? db.select({ id: s.partners.id, name: s.accounts.name }).from(s.partners)
-          .innerJoin(s.accounts, eq(s.partners.accountId, s.accounts.id)).where(eq(s.partners.id, event.partnerId))
-      : Promise.resolve([]),
     db.query.leads.findMany({ where: eq(s.leads.eventId, id), orderBy: [desc(s.leads.createdAt)] }),
     db.query.appointments.findMany({ where: eq(s.appointments.eventId, id) }),
     db.query.tasks.findMany({ where: and(eq(s.tasks.eventId, id), eq(s.tasks.status, "Open")) }),
     db.query.activities.findMany({ where: eq(s.activities.eventId, id), orderBy: [desc(s.activities.occurredAt)], limit: 10 }),
   ]);
-  const partner = partnerRow[0];
 
   // The AI panel appears only when this event actually came from the agent, or
   // has been reviewed. A hand-entered event renders exactly as it always did.
@@ -62,7 +57,7 @@ export default async function EventDetail({ params, searchParams }: {
           <span className="text-soft">{event.type} · {fmtDateTime(event.startsAt)}{event.locationText ? ` · ${event.locationText}` : ""}</span></span>}
         actions={<>
           <BtnLink variant="outline" href={`/events/${id}/edit`}>Edit</BtnLink>
-          <BtnLink variant="outline" href={`/leads/new${qs({ eventId: id, campaignId: event.campaignId, partnerId: event.partnerId, source: "Event" })}`}>Add Lead</BtnLink>
+          <BtnLink variant="outline" href={`/leads/new${qs({ eventId: id, campaignId: event.campaignId, source: "Event" })}`}>Add Lead</BtnLink>
           <BtnLink href={`/activities/new${qs({ eventId: id, accountId: event.accountId, returnTo: `/events/${id}` })}`}>Log Activity</BtnLink>
         </>} />
 
@@ -117,7 +112,7 @@ export default async function EventDetail({ params, searchParams }: {
 
           <Card>
             <CardHeader title="Attendees & Leads" action={
-              <Link href={`/leads/new${qs({ eventId: id, campaignId: event.campaignId, partnerId: event.partnerId, source: "Event" })}`}
+              <Link href={`/leads/new${qs({ eventId: id, campaignId: event.campaignId, source: "Event" })}`}
                 className="text-xs font-medium text-accent-deep hover:underline">+ Add lead</Link>} />
             {leads.length === 0 ? (
               <p className="px-5 pb-4 text-sm text-faint">No leads captured yet.</p>
@@ -262,7 +257,6 @@ export default async function EventDetail({ params, searchParams }: {
                 ["Contact", contact ? <RecordLink key="c" href={`/contacts/${contact.id}`}>{contact.firstName} {contact.lastName}</RecordLink> : "—"],
                 ["Opportunity", opportunity ? <RecordLink key="o" href={`/opportunities/${opportunity.id}`}>{opportunity.name}</RecordLink> : "—"],
                 ["Campaign", campaign ? <RecordLink key="k" href={`/campaigns/${campaign.id}`}>{campaign.name}</RecordLink> : "—"],
-                ["Partner", partner ? <RecordLink key="p" href={`/partners/${partner.id}`}>{partner.name}</RecordLink> : "—"],
                 ["Booked on", fmtDate(event.bookedAt)],
                 ["Follow-up", event.followUpRequired ? `Due ${fmtDate(event.followUpDueAt)}` : "Not required"],
               ] as [string, React.ReactNode][]).map(([k, v]) => (

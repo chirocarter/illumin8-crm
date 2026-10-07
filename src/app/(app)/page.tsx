@@ -18,7 +18,7 @@ import type { SP } from "@/lib/lists";
 export const dynamic = "force-dynamic";
 
 const KIND_ICON: Record<string, string> = {
-  task: "check", opportunity: "pipeline", event: "calendar", pickup: "megaphone",
+  task: "check", opportunity: "pipeline", event: "calendar",
 };
 
 export default async function CommandCenter({ searchParams }: { searchParams: Promise<SP> }) {
