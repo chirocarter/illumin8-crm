@@ -7,7 +7,7 @@ import {
   CONTACT_ACTIVITY_TYPES, IN_PERSON_ACTIVITY_TYPES, PARTNERSHIP_CONVO_OUTCOMES, OPEN_STAGES,
   INFLUENCE_LEVELS, RELATIONSHIP_STRENGTHS, RELATIONSHIP_STATUSES, INTEREST_LEVELS,
   LEAD_APPT_STATUSES, APPOINTMENT_STATUSES, ACCOUNT_STATUSES, OPPORTUNITY_STAGES, EVENT_STATUSES,
-  REPORTING_CALL_TYPES, DROP_IN_ACTIVITY_TYPES,
+  REPORTING_CALL_TYPES, DROP_IN_ACTIVITY_TYPES, PHONE_CALL_TYPES,
 } from "./taxonomy";
 import { todayISO, addDays, nowISO } from "./dates";
 import { listScope, scopeConds } from "./scope";
@@ -205,7 +205,7 @@ export async function listActivities(sp: SP) {
   const typeGroup = spStr(sp, "typeGroup");
   if (typeGroup === "contact") conds.push(inArray(s.activities.type, [...CONTACT_ACTIVITY_TYPES]));
   if (typeGroup === "inperson") conds.push(inArray(s.activities.type, [...IN_PERSON_ACTIVITY_TYPES]));
-  if (typeGroup === "phone") conds.push(inArray(s.activities.type, ["Phone Call", "Voicemail"]));
+  if (typeGroup === "phone") conds.push(inArray(s.activities.type, [...PHONE_CALL_TYPES]));
   if (typeGroup === "reportingcalls") conds.push(inArray(s.activities.type, [...REPORTING_CALL_TYPES]));
   if (typeGroup === "dropins") conds.push(inArray(s.activities.type, [...DROP_IN_ACTIVITY_TYPES]));
   const outcome = spStr(sp, "outcome");

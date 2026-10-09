@@ -5,7 +5,7 @@ import { db, schema as s } from "@/db";
 import { and, count, countDistinct, eq, gte, inArray, isNotNull, lt, notInArray, sql, sum, type SQL } from "drizzle-orm";
 import {
   CONTACT_ACTIVITY_TYPES, IN_PERSON_ACTIVITY_TYPES, PARTNERSHIP_CONVO_OUTCOMES,
-  OPEN_STAGES, NON_OUTREACH_EVENT_TYPES, MEETING_EVENT_TYPES, REPORTING_CALL_TYPES,
+  OPEN_STAGES, NON_OUTREACH_EVENT_TYPES, MEETING_EVENT_TYPES, PHONE_CALL_TYPES, IN_PERSON_CALL_WEIGHT,
 } from "./taxonomy";
 import { followUpCondition } from "./followups";
 import { humanCountableAccounts } from "./ai-review";
@@ -80,7 +80,7 @@ export async function metricValues(
     phoneCalls, emails, followUps, partnershipConvos, dropBoxVisits,
     eventsBooked, meetingsBooked, meetingsAttended, partnershipsConfirmed,
     eventsHeld, screenings, apptsBooked, apptsShowed, noShows, charged, collected,
-    hoursWorked, labourCost, directSpend, reportingCalls,
+    hoursWorked, labourCost, directSpend,
   ] = await Promise.all([
     // humanCountableAccounts(): an AI prospect awaiting review is a candidate,
     // not a business someone added. It stays out of this count until approved.
@@ -89,7 +89,7 @@ export async function metricValues(
     one(db.select({ c: countDistinct(a.accountId) }).from(a).where(and(dateRange, inArray(a.type, [...CONTACT_ACTIVITY_TYPES]), isNotNull(a.accountId)))),
     act(),
     one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.type, [...IN_PERSON_ACTIVITY_TYPES])))),
-    one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.type, ["Phone Call", "Voicemail"])))),
+    one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.type, [...PHONE_CALL_TYPES])))),
     act(eq(a.type, "Email")),
     act(followUpCondition()),
     one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.outcome, [...PARTNERSHIP_CONVO_OUTCOMES])))),
@@ -122,14 +122,16 @@ export async function metricValues(
       .where(and(gte(s.timeEntries.workedOn, from), lt(s.timeEntries.workedOn, upper(to)), ...inScope(s.timeEntries)))),
     one(db.select({ c: sum(s.expenses.amount) }).from(s.expenses)
       .where(and(gte(s.expenses.spentOn, from), lt(s.expenses.spentOn, upper(to)), ...inScope(s.expenses)))),
-
-    // Calls For Reporting Purpose — drop-ins + phone calls + meetings + events
-    // as one number. Activities only; see REPORTING_CALL_TYPES for why.
-    one(db.select({ c: count() }).from(a).where(and(dateRange, inArray(a.type, [...REPORTING_CALL_TYPES])))),
   ]);
 
   // Spend is labour plus money out the door.
   const marketingSpend = labourCost + directSpend;
+
+  // Calls For Reporting Purpose: each in-person visit is worth
+  // IN_PERSON_CALL_WEIGHT phone calls. Built from the two metrics above rather
+  // than its own query, so the Performance Report's breakdown is the same rows
+  // and always adds up to the headline.
+  const reportingCalls = phoneCalls + IN_PERSON_CALL_WEIGHT * inPersonVisits;
 
   // Carried into every drill-down so the list opens the same scope the number counted.
   const range = { from, to, ...linkParams };

@@ -77,24 +77,37 @@ export const COMMUNICATION_TYPES = [
   "Phone Call", "Voicemail", "Email", "Text", "In-Person Visit", "Meeting", "Follow-Up",
 ] as const;
 
-// "Calls For Reporting Purpose" — the headline touchpoint count leadership asks
-// for: phone calls + drop-ins.
-//
-// Counted from ACTIVITIES. Voicemail rides with Phone Call to match the
-// existing Phone Calls metric, and servicing a drop box counts as a drop-in —
-// it is still a visit to the business. Drop Box Visits also keep their own goal
-// line, which is a separate figure and not double counting.
-export const REPORTING_CALL_TYPES = [
-  "In-Person Visit", "Drop Box Visit", "Phone Call", "Voicemail",
-] as const;
+/** Phone Calls metric: Voicemail rides with Phone Call. */
+export const PHONE_CALL_TYPES = ["Phone Call", "Voicemail"] as const;
 
-/** The drop-in half of the reporting-calls number: visits made in person. */
+/** Drop-ins only (visits and drop box runs) — kept as an activities-list filter. */
 export const DROP_IN_ACTIVITY_TYPES = ["In-Person Visit", "Drop Box Visit"] as const;
 
+/**
+ * In-Person Visits: everything done face to face — visits, drop box pickups,
+ * meetings attended, and events attended (lunch and learns, screenings,
+ * networking). Counted from ACTIVITIES, so each one counts once, for whoever
+ * logged it; the calendar's Meetings Attended / Events Held describe the same
+ * work from the event side and are never added on top.
+ */
 export const IN_PERSON_ACTIVITY_TYPES = [
   "In-Person Visit", "Drop Box Visit", "Meeting", "Lunch and Learn",
   "Screening Event", "Networking",
 ] as const;
+
+// "Calls For Reporting Purpose" — the headline touchpoint number leadership
+// asks for, on the Performance Report:
+//
+//     phone calls  +  IN_PERSON_CALL_WEIGHT × in-person visits
+//
+// Set with the CFO on 2026-10-09: a face-to-face visit is worth four calls.
+// Before that, drop-ins counted as one call each and meetings and events were
+// left out. Both previous and current periods are computed with this rule, so
+// the "vs last period" change always compares like with like.
+export const IN_PERSON_CALL_WEIGHT = 4;
+
+/** Every activity type that contributes to Calls For Reporting Purpose. */
+export const REPORTING_CALL_TYPES = [...PHONE_CALL_TYPES, ...IN_PERSON_ACTIVITY_TYPES] as const;
 
 export const ACTIVITY_OUTCOMES = [
   "No Answer", "Left Voicemail", "Awaiting Reply", "Spoke with Gatekeeper", "Reached Decision Maker",

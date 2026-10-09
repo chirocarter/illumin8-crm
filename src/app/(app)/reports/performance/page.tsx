@@ -5,7 +5,7 @@ import { PageHeader, Card, CardHeader, DrillNumber, pillSm } from "@/components/
 import PrintButton from "@/components/PrintButton";
 import ScopeToggle from "@/components/ScopeToggle";
 import { metricValues, qs } from "@/lib/metrics";
-import { OPEN_STAGES, REPORTING_CALL_TYPES, DROP_IN_ACTIVITY_TYPES } from "@/lib/taxonomy";
+import { OPEN_STAGES, IN_PERSON_CALL_WEIGHT } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/auth";
 import { activeCity, resolveScope, scopeConds, selectableUsers } from "@/lib/scope";
 import {
@@ -141,30 +141,6 @@ export default async function PerformanceReport({ searchParams }: { searchParams
     ))
     .groupBy(s.appointments.locationId, s.locations.name);
 
-  // Composition of Calls For Reporting Purpose. The headline is a single
-  // number, but an admin reading the PDF should be able to see what is inside
-  // it without asking, so the parts are shown alongside and must sum to it.
-  const callParts = await db
-    .select({ type: s.activities.type, n: count() })
-    .from(s.activities)
-    .where(and(
-      gte(s.activities.occurredAt, cur.from),
-      lt(s.activities.occurredAt, cur.to + "T99"),
-      eq(s.activities.systemGenerated, false),
-      inArray(s.activities.type, [...REPORTING_CALL_TYPES]),
-      ...scopeConds(s.activities, scope),
-    ))
-    .groupBy(s.activities.type);
-  const partOf = (types: string[]) =>
-    callParts.filter((r) => types.includes(r.type)).reduce((t, r) => t + Number(r.n), 0);
-  // Each part carries the query that reproduces its OWN number. Both span two
-  // activity types, so a single `type=` filter would open a list that
-  // disagrees with the figure above it.
-  const callBreakdown = [
-    { label: "Phone Calls", value: partOf(["Phone Call", "Voicemail"]), query: { typeGroup: "phone" } },
-    { label: "Drop-Ins", value: partOf([...DROP_IN_ACTIVITY_TYPES]), query: { typeGroup: "dropins" } },
-  ];
-
   const staleCutoff = addDays(todayISO(), -14);
   const [m, mPrev, mMtd, openOpps, staleOpps, goals] = await Promise.all([
     metricValues(cur.from, cur.to, scope, link),
@@ -178,6 +154,17 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
   const delta = (key: string) => m[key].value - mPrev[key].value;
   const money = (v: number) => "$" + Math.round(v).toLocaleString("en-US");
+
+  // Composition of Calls For Reporting Purpose. The headline is a single
+  // number, but an admin reading the PDF should be able to see what is inside
+  // it without asking, so the parts are shown alongside as arithmetic that
+  // reproduces it. They are the report's own Phone Calls and In-Person Visits
+  // metrics — the same rows the headline is built from — and each part links
+  // to exactly the activities it counts.
+  const callBreakdown = [
+    { label: "Phone Calls", count: m.phone_calls.value, weight: 1, href: m.phone_calls.href },
+    { label: "In-Person Visits", count: m.in_person_visits.value, weight: IN_PERSON_CALL_WEIGHT, href: m.in_person_visits.href },
+  ];
 
   // Goal pace: weekly targets scaled to the period length (a month ≈ 4.3 weeks).
   //
@@ -352,17 +339,22 @@ export default async function PerformanceReport({ searchParams }: { searchParams
             <p className="mt-2 text-xs text-soft">
               <Delta diff={delta("calls_for_reporting")} /> <span className="text-faint">vs {prevLabel}</span>
             </p>
+            <p className="mt-1 text-xs text-faint">Each in-person visit counts as {IN_PERSON_CALL_WEIGHT} calls.</p>
           </div>
 
-          {/* The four parts, each drilling into its own records. They sum to the
-              headline, so the number can be checked rather than taken on faith. */}
+          {/* The parts, each drilling into its own records and showing its own
+              count, with the weight beside it. Worked through, they give the
+              headline — the number can be checked rather than taken on faith. */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
             {callBreakdown.map((part, i) => (
               <div key={part.label} className="flex items-center gap-2">
                 {i > 0 && <span className="text-lg font-light text-faint">+</span>}
-                <Link href={`/activities${qs({ from: cur.from, to: cur.to, ...part.query, ...link })}`}
+                <Link href={part.href}
                   className="rounded-xl bg-well px-3 py-2 text-center transition-colors hover:bg-hairline">
-                  <span className="block text-lg font-semibold leading-none">{part.value}</span>
+                  <span className="block text-lg font-semibold leading-none">
+                    {part.count}
+                    {part.weight !== 1 && <span className="text-sm font-medium text-soft"> × {part.weight}</span>}
+                  </span>
                   <span className="mt-1 block text-[0.65rem] font-medium uppercase tracking-wider text-faint">{part.label}</span>
                 </Link>
               </div>
@@ -571,9 +563,11 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
       <p className="mt-4 text-xs text-faint print:mt-5 print:border-t print:border-line print:pt-3">
         <span className="hidden font-medium text-soft print:inline">How these numbers are defined — </span>
-        <strong className="font-medium text-soft">Calls For Reporting Purpose</strong> = phone calls + drop-ins, counted from
-        logged activities (Phone Call, Voicemail, In-Person Visit, Drop Box Visit — servicing a box counts as a drop-in). Meetings attended and events held are NOT included —
-        they are reported separately below.
+        <strong className="font-medium text-soft">Calls For Reporting Purpose</strong> = phone calls + {IN_PERSON_CALL_WEIGHT} × in-person visits,
+        counted from logged activities. Phone calls are Phone Call and Voicemail activities. In-person visits are In-Person Visit,
+        Drop Box Visit, Meeting, Lunch and Learn, Screening Event and Networking activities — visits, drop box pickups, and meetings
+        and events attended — each worth {IN_PERSON_CALL_WEIGHT} calls. Each counts once, for whoever logged it; the Meetings Attended
+        and Events Held lines below count the same work from the calendar and are not added on top.
         Definitions match the Command Center and weekly reports — one source of truth. “Booked” counts appointments created in
         the period; “charged” and “collected” sum their amounts. Goal targets are the weekly goals from Settings, scaled to the period length.
         {period === "custom"
