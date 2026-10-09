@@ -119,6 +119,7 @@ export function NeckScanPreview() {
       <p className="mt-3 text-[0.9rem] leading-relaxed text-neutral-600">
         Surface EMG sensors rest lightly on the skin &mdash; no needles &mdash; and measure muscle tension on each
         side of your neck, at every vertebra from <span className="font-semibold text-neutral-800">C1 to C7</span>.
+        You&rsquo;ll see your own results right there, and we&rsquo;ll walk you through them.
       </p>
     </section>
   );
