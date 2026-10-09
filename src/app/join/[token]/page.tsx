@@ -10,6 +10,9 @@
 //   screening_slots → the same, plus one 10-minute window (lead + booking on
 //                  the campaign's time sheet); a waitlist when every window is full
 //
+// Both screening forms open with a sample neck EMG read-out (NeckScanPreview)
+// so people see what the screening is before they sign up.
+//
 // LAYOUT RULES, both learned on real phones:
 //   • On a phone the form fills the screen edge to edge. The floating card with
 //     gutters only appears from the sm breakpoint up, where there is room for it.
@@ -20,6 +23,7 @@ import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { eq } from "drizzle-orm";
 import { Icon } from "@/components/icons";
+import { NeckScanPreview } from "@/components/NeckScanPreview";
 import {
   normalizePublicForm, isScreeningForm, PARTNERSHIP_INTERESTS, SCREENING_SYMPTOMS, type PublicFormType,
 } from "@/lib/taxonomy";
@@ -148,6 +152,9 @@ export default async function JoinPage({ params, searchParams }: {
             ))}
           </div>
         </div>
+
+        {/* Screening forms show what the screening is before asking for a yes. */}
+        {isScreening && !screening?.closed && <NeckScanPreview />}
 
         {screening?.closed ? (
           <div className="px-6 pb-10 pt-8 text-center">
