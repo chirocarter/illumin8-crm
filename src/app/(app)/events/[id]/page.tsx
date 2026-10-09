@@ -4,13 +4,15 @@ import type { SP } from "@/lib/lists";
 import { notFound } from "next/navigation";
 import { db, schema as s } from "@/db";
 import { authorize } from "@/lib/scope";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, LinkableMetric, Btn, Field, inputCls } from "@/components/ui";
 import { saveEventOutcome } from "@/app/actions";
 import { fmtDate, fmtDateTime, fmtMoney, todayISO } from "@/lib/dates";
 import { qs } from "@/lib/metrics";
 import { parseEventResearch } from "@/lib/agent-event-review";
 import OrganizerContact from "@/components/OrganizerContact";
+import ScreeningTimeSheet from "@/components/ScreeningTimeSheet";
+import { timeSheets } from "@/lib/screening-intake";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,20 @@ export default async function EventDetail({ params, searchParams }: {
     db.query.tasks.findMany({ where: and(eq(s.tasks.eventId, id), eq(s.tasks.status, "Open")) }),
     db.query.activities.findMany({ where: eq(s.activities.eventId, id), orderBy: [desc(s.activities.occurredAt)], limit: 10 }),
   ]);
+
+  // Screening intake campaigns whose form signs people up for THIS event.
+  const screeningCampaigns = await db.query.campaigns.findMany({
+    where: and(eq(s.campaigns.eventId, id), inArray(s.campaigns.publicForm, ["screening", "screening_slots"])),
+    orderBy: [desc(s.campaigns.createdAt)],
+  });
+  const [sheets, signupRows] = await Promise.all([
+    timeSheets(screeningCampaigns),
+    screeningCampaigns.length
+      ? db.select({ campaignId: s.leads.campaignId, n: count() }).from(s.leads)
+          .where(inArray(s.leads.campaignId, screeningCampaigns.map((c) => c.id))).groupBy(s.leads.campaignId)
+      : Promise.resolve([]),
+  ]);
+  const signups = new Map(signupRows.map((r) => [r.campaignId, Number(r.n)]));
 
   // The AI panel appears only when this event actually came from the agent, or
   // has been reviewed. A hand-entered event renders exactly as it always did.
@@ -110,6 +126,31 @@ export default async function EventDetail({ params, searchParams }: {
               </form>
             </Card>
           )}
+
+          {/* Screening intake forms pointed at this event: their sign-ups, and
+              for "pick a time" forms the time sheet. */}
+          {screeningCampaigns.length > 0 && (
+            <Card>
+              <CardHeader title="Screening sign-ups" />
+              <ul className="divide-y divide-hairline border-t border-hairline">
+                {screeningCampaigns.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-sm">
+                    <span className="min-w-0">
+                      <RecordLink href={`/campaigns/${c.id}`}>{c.name}</RecordLink>
+                      <span className="ml-2 text-xs text-faint">{c.publicForm === "screening_slots" ? "Pick a time" : "Interest"}</span>
+                    </span>
+                    <Link href={`/leads${qs({ campaignId: c.id })}`} className="text-xs font-medium text-accent-deep hover:underline">
+                      {signups.get(c.id) ?? 0} signed up
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+          {screeningCampaigns.filter((c) => sheets.has(c.id)).map((c) => (
+            <ScreeningTimeSheet key={c.id} sheet={sheets.get(c.id)!} editHref={`/campaigns/${c.id}/edit`}
+              subtitle={<span className="text-soft">From <RecordLink href={`/campaigns/${c.id}`}>{c.name}</RecordLink></span>} />
+          ))}
 
           <Card>
             <CardHeader title="Attendees & Leads" action={

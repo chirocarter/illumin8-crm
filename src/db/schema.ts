@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, blob } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, blob, index, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // All datetimes are stored as local ISO strings ("YYYY-MM-DDTHH:mm:ss") so that
@@ -153,12 +153,41 @@ export const campaigns = sqliteTable("campaigns", {
   notes: text("notes"),
   // Random slug for the public QR sign-up page (/join/<token>)
   publicToken: text("public_token").unique(),
-  // Which QR form this campaign shows: patient | partnership | lunch
+  // Which QR form this campaign shows — see PUBLIC_FORM_TYPES in lib/taxonomy.
   publicForm: text("public_form").notNull().default("patient"),
+  // ---- screening intake forms (migration 0016) ----
+  // The event the screening form signs people up for: its name, date and place
+  // head the form, and its page shows the sign-ups. Not the same link as
+  // events.campaignId ("events run under this campaign").
+  eventId: integer("event_id").references((): AnySQLiteColumn => events.id),
+  // "Pick a time" form only: one block of time cut into 10-minute windows,
+  // stored as local wall-clock "YYYY-MM-DDTHH:mm:00" (see lib/screening).
+  slotsStart: text("slots_start"),
+  slotsEnd: text("slots_end"),
+  slotCapacity: integer("slot_capacity").notNull().default(1), // people per window
   cityId: integer("city_id").references(() => cities.id),
   userId: integer("user_id").references(() => users.id),
   createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
 });
+
+/**
+ * One person's 10-minute window on a "pick a time" screening form.
+ *
+ * Separate from `appointments` on purpose: those are new-patient appointments
+ * with money attached, and counting screening windows there would inflate
+ * Appointments Booked. A booking belongs to exactly one lead; deleting the lead
+ * frees the window. Capacity is enforced by the insert itself (see the public
+ * form action), not by a check that could race.
+ */
+export const screeningBookings = sqliteTable("screening_bookings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  campaignId: integer("campaign_id").notNull().references(() => campaigns.id),
+  leadId: integer("lead_id").notNull().unique().references(() => leads.id),
+  slotStart: text("slot_start").notNull(), // "YYYY-MM-DDTHH:mm:00", a window start from lib/screening
+  cityId: integer("city_id").references(() => cities.id),
+  userId: integer("user_id").references(() => users.id),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now','localtime'))`),
+}, (t) => [index("screening_bookings_campaign_slot_idx").on(t.campaignId, t.slotStart)]);
 
 /**
  * RETIRED — nothing in the app reads or writes this table any more.

@@ -1,18 +1,44 @@
 import { Card, Field, inputCls, selectCls, Btn } from "@/components/ui";
-import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES, PUBLIC_FORM_TYPES, normalizePublicForm } from "@/lib/taxonomy";
+import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES, NON_OUTREACH_EVENT_TYPES, normalizePublicForm } from "@/lib/taxonomy";
 import { db, schema as s } from "@/db";
+import { and, asc, gte, inArray, isNull, notInArray, or, eq } from "drizzle-orm";
 import { cityWhere } from "@/lib/scope";
+import { humanCountableEvents } from "@/lib/ai-review";
+import { fmtDate, todayISO } from "@/lib/dates";
+import PublicFormSettings from "./PublicFormSettings";
 import type { schema } from "@/db";
 
 type Campaign = typeof schema.campaigns.$inferSelect;
 
-export default async function CampaignForm({ action, campaign, defaults }: {
+export default async function CampaignForm({ action, campaign, defaults, screeningError }: {
   action: (fd: FormData) => Promise<void>;
   campaign?: Campaign;
-  defaults?: { accountId?: number };
+  /** publicForm: reopen on this form type (after the server sent settings back). */
+  defaults?: { accountId?: number; publicForm?: string };
+  /** Why the screening window settings were sent back, if they were. */
+  screeningError?: string;
 }) {
-  const accounts = await db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] });
   const c = campaign;
+  const [accounts, events] = await Promise.all([
+    db.query.accounts.findMany({ where: await cityWhere(s.accounts.cityId), orderBy: (a, { asc }) => [asc(a.name)] }),
+    // Events a screening form can be for: this city's outreach events that are
+    // still ahead (or undated), real rather than an unreviewed AI suggestion,
+    // and not called off — plus whatever this campaign already points at.
+    db.select({ id: s.events.id, name: s.events.name, startsAt: s.events.startsAt, endsAt: s.events.endsAt })
+      .from(s.events)
+      .where(or(
+        and(
+          await cityWhere(s.events.cityId),
+          notInArray(s.events.type, [...NON_OUTREACH_EVENT_TYPES]),
+          humanCountableEvents(),
+          notInArray(s.events.status, ["Canceled", "Lost"]),
+          or(isNull(s.events.startsAt), gte(s.events.startsAt, todayISO())),
+        ),
+        c?.eventId ? eq(s.events.id, c.eventId) : inArray(s.events.id, []),
+      ))
+      .orderBy(asc(s.events.startsAt))
+      .limit(200),
+  ]);
 
   return (
     <form action={action}>
@@ -44,12 +70,20 @@ export default async function CampaignForm({ action, campaign, defaults }: {
           <Field label="End date">
             <input name="endDate" type="date" defaultValue={c?.endDate?.slice(0, 10) ?? ""} className={inputCls} />
           </Field>
-          <Field label="QR sign-up form" className="md:col-span-2"
-            hint="What the scannable form collects. Patient → a lead. Partnership & Lunch & learn → the business, a contact, and a lead.">
-            <select name="publicForm" defaultValue={normalizePublicForm(c?.publicForm)} className={selectCls}>
-              {PUBLIC_FORM_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </Field>
+          <PublicFormSettings
+            initial={{
+              publicForm: normalizePublicForm(defaults?.publicForm ?? c?.publicForm),
+              eventId: c?.eventId ?? null,
+              slotDate: c?.slotsStart?.slice(0, 10) ?? "",
+              slotStartTime: c?.slotsStart?.slice(11, 16) ?? "",
+              slotEndTime: c?.slotsEnd?.slice(11, 16) ?? "",
+              slotCapacity: c?.slotCapacity ?? 1,
+            }}
+            events={events.map((e) => ({
+              id: e.id, startsAt: e.startsAt, endsAt: e.endsAt,
+              label: `${e.name} — ${e.startsAt ? fmtDate(e.startsAt) : "date TBD"}`,
+            }))}
+            error={screeningError} />
           <Field label="QR code / tracking link" className="md:col-span-2">
             <input name="trackingUrl" defaultValue={c?.trackingUrl ?? ""} className={inputCls} placeholder="https://illumin8chiro.com/win-lunch" />
           </Field>

@@ -13,8 +13,9 @@ import { nowISO, todayISO, fmtDate } from "@/lib/dates";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
 import {
   ACCOUNT_STATUSES, ACTIVE_PARTNER, INTEREST_LEVELS, LEAD_APPT_STATUSES,
-  RELATIONSHIP_STRENGTHS, EVENT_STATUSES, EVENT_BOOKED_STATUSES, normalizePublicForm,
+  RELATIONSHIP_STRENGTHS, EVENT_STATUSES, EVENT_BOOKED_STATUSES, normalizePublicForm, isScreeningForm,
 } from "@/lib/taxonomy";
+import { parseSlotSettings } from "@/lib/screening";
 import { activeCityId, canAccessCity, CITY_COOKIE, resolveCityView } from "@/lib/scope";
 import { formatPhone } from "@/lib/phone";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
@@ -716,9 +717,35 @@ function campaignValues(fd: FormData) {
   };
 }
 
+/**
+ * Settings only the two screening intake forms use: which event the form signs
+ * people up for, and — for "pick a time" — the block of 10-minute windows.
+ *
+ * Other form types leave these columns alone, so switching a campaign away from
+ * a screening form and back doesn't lose its settings. Invalid window settings
+ * send the person back to the form with the reason, rather than saving a
+ * campaign whose public form can't offer any times.
+ */
+async function screeningValues(fd: FormData, backTo: string) {
+  const form = normalizePublicForm(str(fd, "publicForm"));
+  if (!isScreeningForm(form)) return {};
+  const eventId = num(fd, "eventId");
+  if (eventId) await assertOwned(s.events, eventId); // same city, or it throws
+  if (form === "screening") return { eventId };
+  const slots = parseSlotSettings({
+    date: str(fd, "slotDate"), start: str(fd, "slotStartTime"),
+    end: str(fd, "slotEndTime"), capacity: str(fd, "slotCapacity"),
+  });
+  // `form` reopens the page on this form type, so the message is visible.
+  if (!slots.ok) redirect(`${backTo}?form=${form}&screeningError=${encodeURIComponent(slots.error)}`);
+  return { eventId, ...slots.value };
+}
+
 export async function createCampaign(fd: FormData) {
+  const screening = await screeningValues(fd, "/campaigns/new");
   const [row] = await db.insert(s.campaigns).values({
     ...campaignValues(fd),
+    ...screening,
     publicToken: randomBytes(6).toString("base64url"), // powers the QR sign-up page
     ...(await stamp()),
   }).returning();
@@ -729,7 +756,8 @@ export async function updateCampaign(fd: FormData) {
   await requireUser();
   const id = num(fd, "id")!;
   await assertOwned(s.campaigns, id);
-  await db.update(s.campaigns).set(campaignValues(fd)).where(eq(s.campaigns.id, id));
+  const screening = await screeningValues(fd, `/campaigns/${id}/edit`);
+  await db.update(s.campaigns).set({ ...campaignValues(fd), ...screening }).where(eq(s.campaigns.id, id));
   done(`/campaigns/${id}`);
 }
 
@@ -1464,7 +1492,8 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
       { table: s.appointments, col: s.appointments.leadId, field: "leadId", label: "appointments" },
       { table: s.tasks, col: s.tasks.leadId, field: "leadId", label: "tasks" },
     ],
-    remove: [],
+    // A screening window belongs to the person; removing them frees it.
+    remove: [{ table: s.screeningBookings, col: s.screeningBookings.leadId, field: "leadId", label: "screening time slots" }],
   },
   opportunity: {
     detach: [
@@ -1484,6 +1513,7 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
       // Same rule as on a business: the ledger survives, detached. See the note
       // in the account plan.
       { table: s.agentActivities, col: s.agentActivities.eventId, field: "eventId", label: "agent audit entries" },
+      { table: s.campaigns, col: s.campaigns.eventId, field: "eventId", label: "screening sign-up forms" },
     ],
     remove: [],
   },
@@ -1496,7 +1526,8 @@ const DELETE_PLAN: Record<string, { detach: SoftRef[]; remove: HardRef[] }> = {
       { table: s.opportunities, col: s.opportunities.campaignId, field: "campaignId", label: "opportunities" },
       { table: s.documents, col: s.documents.campaignId, field: "campaignId", label: "documents" },
     ],
-    remove: [],
+    // The time sheet goes with its campaign; the people stay, as leads.
+    remove: [{ table: s.screeningBookings, col: s.screeningBookings.campaignId, field: "campaignId", label: "screening time slots" }],
   },
   project: {
     detach: [

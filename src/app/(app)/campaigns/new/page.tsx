@@ -14,7 +14,8 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
     <div className="mx-auto max-w-3xl">
       <PageHeader title="New Campaign" />
       <CampaignForm action={createCampaign}
-        defaults={{ accountId: accountId ? Number(accountId) : undefined }} />
+        defaults={{ accountId: accountId ? Number(accountId) : undefined, publicForm: spStr(sp, "form") }}
+        screeningError={spStr(sp, "screeningError")} />
     </div>
   );
 }

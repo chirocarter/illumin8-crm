@@ -4,13 +4,89 @@
 // It can only create a lead (and, for business-intake campaigns, the
 // business record it belongs to), and only against a valid campaign token.
 import { redirect } from "next/navigation";
-import { db, schema as s } from "@/db";
+import { db, schema as s, writeAtomically } from "@/db";
 import { and, eq, like } from "drizzle-orm";
-import { normalizePublicForm } from "@/lib/taxonomy";
+import { normalizePublicForm, isScreeningForm, SCREENING_SYMPTOMS } from "@/lib/taxonomy";
 import { formatPhone, phoneKey } from "@/lib/phone";
+import { screeningState } from "@/lib/screening-intake";
 
 const clean = (fd: FormData, key: string, max: number) =>
   String(fd.get(key) ?? "").trim().slice(0, max);
+
+type Campaign = typeof s.campaigns.$inferSelect;
+
+/**
+ * The two screening intake forms. Always a lead (source "Screening", attributed
+ * to the campaign AND its event); for "pick a time", also one booking on the
+ * campaign's time sheet.
+ *
+ * CAPACITY is enforced by the booking insert itself: it only writes a row while
+ * the window has fewer bookings than the campaign allows, in one statement, so
+ * two people taking the last spot at the same moment can't both get it. The
+ * loser's lead is removed again and they're asked to pick another time — a
+ * lead that claimed a window it didn't get would mislead whoever calls them.
+ */
+async function submitScreening(fd: FormData, campaign: Campaign, token: string, person: {
+  firstName: string; lastName: string; phone: string | null; email: string;
+}) {
+  const { firstName, lastName, phone, email } = person;
+  if (fd.get("confirm") !== "yes" || !firstName || !lastName || phoneKey(phone).length < 7) {
+    redirect(`/join/${token}?error=1`);
+  }
+
+  const state = await screeningState(campaign);
+  if (state.closed) redirect(`/join/${token}`); // the page explains why
+
+  // Only boxes from the fixed list are kept. This is not a health record: no
+  // free text, nothing beyond which of these were ticked.
+  const symptoms = fd.getAll("symptom").map(String)
+    .filter((v) => (SCREENING_SYMPTOMS as readonly string[]).includes(v));
+
+  let slot: string | null = null;
+  let waitlist = false;
+  if (state.windows.length) {
+    const picked = state.windows.find((w) => w.start === clean(fd, "slot", 30));
+    // A window that looks full here may still free up or fill before the
+    // insert — the insert decides, not this snapshot.
+    if (picked) slot = picked.start;
+    else if (state.windows.some((w) => !w.full)) redirect(`/join/${token}?error=pick`);
+    else waitlist = true;
+  }
+
+  const own = { cityId: campaign.cityId, userId: campaign.userId };
+  const bits = [`Wants to take part in the spinal health screening${state.event ? ` at ${state.event.name}` : ""}`];
+  if (symptoms.length) bits.push(`Symptoms: ${symptoms.join(", ")}`);
+  if (waitlist) bits.push("Waitlist — every screening time was full");
+
+  const [lead] = await db.insert(s.leads).values({
+    firstName, lastName,
+    phone: phone || null,
+    email: email || null,
+    source: "Screening",
+    campaignId: campaign.id,
+    eventId: campaign.eventId,   // counts for the event, and its host in the Partner Report
+    accountId: campaign.accountId,
+    interestLevel: "Warm",
+    apptStatus: "Not Contacted",
+    notes: `Self-submitted via spinal health screening sign-up (${campaign.name}) — ${bits.join(" · ")}`,
+    ...own,
+  }).returning({ id: s.leads.id });
+
+  if (slot) {
+    const [booked] = await writeAtomically([{
+      sql: `INSERT INTO screening_bookings (campaign_id, lead_id, slot_start, city_id, user_id)
+            SELECT ?, ?, ?, ?, ?
+            WHERE (SELECT count(*) FROM screening_bookings WHERE campaign_id = ? AND slot_start = ?) < ?`,
+      args: [campaign.id, lead.id, slot, own.cityId, own.userId, campaign.id, slot, Math.max(1, campaign.slotCapacity)],
+    }]);
+    if (!booked) {
+      await db.delete(s.leads).where(eq(s.leads.id, lead.id));
+      redirect(`/join/${token}?error=slot`);
+    }
+  }
+
+  redirect(`/join/thanks?f=screening${slot ? `&t=${encodeURIComponent(slot)}` : ""}${waitlist ? "&w=1" : ""}`);
+}
 
 export async function submitPublicLead(fd: FormData) {
   // Honeypot: real people never fill a hidden "company" field
@@ -36,6 +112,11 @@ export async function submitPublicLead(fd: FormData) {
   const lastName = clean(fd, "lastName", 80);
   const phone = formatPhone(clean(fd, "phone", 40));
   const email = clean(fd, "email", 120);
+
+  if (isScreeningForm(formType)) {
+    return submitScreening(fd, campaign!, token, { firstName, lastName, phone, email });
+  }
+
   // The general contact form promises a call back, so a phone number is the one
   // thing it can't do without. Seven digits rules out "n/a" and similar while
   // still accepting an international number, which formatPhone leaves as typed.

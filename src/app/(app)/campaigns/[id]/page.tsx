@@ -10,7 +10,9 @@ import { PageHeader, Card, CardHeader, Badge, BtnLink, RecordLink, LinkableMetri
 import DocumentsCard from "@/components/DocumentsCard";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/dates";
 import { qs } from "@/lib/metrics";
-import { normalizePublicForm } from "@/lib/taxonomy";
+import { normalizePublicForm, isScreeningForm } from "@/lib/taxonomy";
+import { timeSheets } from "@/lib/screening-intake";
+import ScreeningTimeSheet from "@/components/ScreeningTimeSheet";
 import type { SP } from "@/lib/lists";
 import { spStr } from "@/lib/lists";
 
@@ -27,8 +29,12 @@ export default async function CampaignDetail({ params, searchParams }: {
   if (!campaign) notFound();
   const formType = normalizePublicForm(campaign.publicForm);
 
-  const [account, leads, events, oppCount, apptStats, showedCount, docs] = await Promise.all([
+  const [account, screeningEvent, sheets, leads, events, oppCount, apptStats, showedCount, docs] = await Promise.all([
     campaign.accountId ? db.query.accounts.findFirst({ where: eq(s.accounts.id, campaign.accountId) }) : null,
+    campaign.eventId && isScreeningForm(formType)
+      ? db.query.events.findFirst({ where: eq(s.events.id, campaign.eventId), columns: { id: true, name: true, startsAt: true } })
+      : null,
+    timeSheets([campaign]),
     db.query.leads.findMany({ where: eq(s.leads.campaignId, id), orderBy: [desc(s.leads.createdAt)] }),
     db.query.events.findMany({ where: eq(s.events.campaignId, id), orderBy: [desc(s.events.startsAt)] }),
     db.select({ c: count() }).from(s.opportunities).where(eq(s.opportunities.campaignId, id)),
@@ -81,6 +87,8 @@ export default async function CampaignDetail({ params, searchParams }: {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          {sheets.get(id) && <ScreeningTimeSheet sheet={sheets.get(id)!} editHref={`/campaigns/${id}/edit`} />}
+
           <Card>
             <CardHeader title="Leads From This Campaign" action={
               <Link href={`/leads${qs({ campaignId: id })}`} className="text-xs font-medium text-accent-deep hover:underline">View all</Link>} />
@@ -147,12 +155,18 @@ export default async function CampaignDetail({ params, searchParams }: {
                     ? "Business partnership form — asks what kind of partnership fits. Scans create the business under Accounts, a contact, and a lead, all attributed to this campaign."
                     : formType === "contact"
                     ? "General contact form — first name and phone required; email, an \"already a patient\" box and a question are optional. Submissions appear under Leads with those answers in the notes, attributed to this campaign."
+                    : formType === "screening"
+                    ? "Screening intake — people confirm they want to take part in the spinal health screening, with name, phone, email and current symptoms. Each becomes a lead, attributed to this campaign and its event."
+                    : formType === "screening_slots"
+                    ? "Screening intake with times — the same, plus a 10-minute window. Bookings fill the time sheet here and on the event; when every window is full, people join a waitlist."
                     : "Lunch & learn form — asks about team size, space, and timing. Scans create the business under Accounts, a contact, and a lead, all attributed to this campaign."}
                 </p>
                 <p className="mt-1.5 rounded-full bg-hairline px-2.5 py-0.5 text-xs font-medium text-soft">
                   {formType === "patient" ? "Collects: patient info"
                     : formType === "partnership" ? "Collects: partnership interest"
                     : formType === "contact" ? "Collects: contact details, existing patient?, question"
+                    : formType === "screening" ? "Collects: screening sign-up + symptoms"
+                    : formType === "screening_slots" ? "Collects: screening sign-up, symptoms + a time"
                     : "Collects: lunch & learn interest"}
                 </p>
               </div>
@@ -165,6 +179,9 @@ export default async function CampaignDetail({ params, searchParams }: {
               {([
                 ["Type", campaign.type],
                 ["Account", account ? <RecordLink key="a" href={`/accounts/${account.id}`}>{account.name}</RecordLink> : "—"],
+                ...(isScreeningForm(formType) ? [["Screening event", screeningEvent
+                  ? <RecordLink key="se" href={`/events/${screeningEvent.id}`}>{screeningEvent.name}</RecordLink>
+                  : "Not tied to an event"] as [string, React.ReactNode]] : []),
                 ["Start", fmtDate(campaign.startDate)],
                 ["End", fmtDate(campaign.endDate)],
                 ["Tracking link", campaign.trackingUrl

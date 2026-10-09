@@ -248,17 +248,35 @@ export const PUBLIC_FORM_TYPES = [
   { value: "partnership", label: "Business partnership", hint: "A business that wants to partner → creates the business, a contact, and a lead." },
   { value: "lunch", label: "Lunch & learn interest", hint: "A business interested in hosting a lunch & learn → creates the business, a contact, and a lead." },
   { value: "contact", label: "General contact", hint: "Name, phone, email, an \"already a patient?\" box and an optional question → creates a lead." },
+  { value: "screening", label: "Screening intake — interest", hint: "Confirms they want to join a spinal health screening; name, phone, email and current symptoms → creates a lead." },
+  { value: "screening_slots", label: "Screening intake — pick a time", hint: "The same, plus a 10-minute time window. Bookings fill a time sheet on the campaign and its event." },
 ] as const;
 
-export type PublicFormType = "patient" | "partnership" | "lunch" | "contact";
+export type PublicFormType = "patient" | "partnership" | "lunch" | "contact" | "screening" | "screening_slots";
 
 /** Normalize stored/legacy values to a current form type. */
 export function normalizePublicForm(value: string | null | undefined): PublicFormType {
   if (value === "partnership") return "partnership";
   if (value === "lunch" || value === "business") return "lunch";
   if (value === "contact") return "contact";
+  if (value === "screening") return "screening";
+  if (value === "screening_slots") return "screening_slots";
   return "patient"; // "patient", "person", null, anything else
 }
+
+export const isScreeningForm = (t: PublicFormType) => t === "screening" || t === "screening_slots";
+
+/**
+ * Symptoms the screening intake asks about — complaints people commonly see a
+ * chiropractor for. A fixed checklist on purpose: this CRM is not a health
+ * record, so it keeps only which of these boxes were ticked (in the lead's
+ * notes), never free-text medical history.
+ */
+export const SCREENING_SYMPTOMS = [
+  "Back pain", "Neck pain", "Headaches or migraines", "Shoulder pain",
+  "Sciatica or leg pain", "Numbness or tingling", "Stiffness or limited movement",
+  "Posture concerns", "Hip or knee pain", "Jaw (TMJ) pain",
+] as const;
 
 export const PARTNERSHIP_INTERESTS = [
   "Restaurant drop box", "Lunch & learn", "Cross-referrals", "Community event / screening", "Not sure yet",

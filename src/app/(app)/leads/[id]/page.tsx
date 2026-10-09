@@ -8,6 +8,7 @@ import { PageHeader, Card, CardHeader, Badge, BtnLink, Btn, RecordLink } from "@
 import { convertLeadToContact } from "@/app/actions";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/dates";
 import { qs } from "@/lib/metrics";
+import { fmtSlotRange } from "@/lib/screening";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,8 @@ export default async function LeadDetail({ params, searchParams }: {
   const lead = await authorize(await db.query.leads.findFirst({ where: eq(s.leads.id, id) }));
   if (!lead) notFound();
 
-  const [campaign, event, account, location, appointments, activities] = await Promise.all([
+  const [booking, campaign, event, account, location, appointments, activities] = await Promise.all([
+    db.query.screeningBookings.findFirst({ where: eq(s.screeningBookings.leadId, id) }),
     lead.campaignId ? db.query.campaigns.findFirst({ where: eq(s.campaigns.id, lead.campaignId) }) : null,
     lead.eventId ? db.query.events.findFirst({ where: eq(s.events.id, lead.eventId) }) : null,
     lead.accountId ? db.query.accounts.findFirst({ where: eq(s.accounts.id, lead.accountId) }) : null,
@@ -76,6 +78,10 @@ export default async function LeadDetail({ params, searchParams }: {
               ["Source", lead.source ?? "—"],
               ["Campaign", campaign ? <RecordLink key="c" href={`/campaigns/${campaign.id}`}>{campaign.name}</RecordLink> : "—"],
               ["Event", event ? <RecordLink key="e" href={`/events/${event.id}`}>{event.name}</RecordLink> : "—"],
+              // Their window on a "pick a time" screening form — the time sheet
+              // links here, so this is where it should be answered.
+              ...(booking ? [["Screening time", <RecordLink key="st" href={`/campaigns/${booking.campaignId}`}>
+                {fmtDate(booking.slotStart)} · {fmtSlotRange(booking.slotStart)}</RecordLink>] as [string, React.ReactNode]] : []),
               ["Business", account ? <RecordLink key="a" href={`/accounts/${account.id}`}>{account.name}</RecordLink> : "—"],
             ] as [string, React.ReactNode][]).map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3">
