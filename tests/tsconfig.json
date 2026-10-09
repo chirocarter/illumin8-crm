@@ -1,0 +1,14 @@
+{
+  // Used only by the test runner (`tsx --tsconfig tests/tsconfig.json --test …`).
+  // Same compiler settings as the app, plus two things plain Node needs:
+  //   • JSX compiled to React calls, so a component can be rendered to HTML;
+  //   • `server-only` mapped to a no-op stub (see stubs/server-only.ts).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["../src/*"],
+      "server-only": ["./stubs/server-only.ts"]
+    }
+  }
+}

@@ -19,6 +19,12 @@ export const MAX_SOURCES = 10;
 export const MAX_URL_LENGTH = 500;
 export const MAX_LABEL_LENGTH = 120;
 export const MAX_TEXT_LENGTH = 300;
+/**
+ * The agent's suggested next step, shown on the review card as "Suggested:".
+ * Room for a sentence or two; it is advice to a person, never an instruction
+ * the CRM acts on — nothing books, contacts or approves because of it.
+ */
+export const MAX_RECOMMENDED_ACTION_LENGTH = 500;
 export const MAX_CHANGELOG_ENTRIES = 50;
 export const MAX_CHANGELOG_NOTE = 300;
 /** Larger than the business cap (8000): an event accumulates a changeLog. */
@@ -128,6 +134,13 @@ export function validateEventResearch(raw: unknown): Pass<EventResearchPayload> 
       const e = set(k, boundedString(r[k], `aiResearch.${k}`, MAX_TEXT_LENGTH));
       if (e) return e;
     }
+  }
+  // Read by the review card. It used to fall through to "unknown key" and be
+  // dropped, so the card's Suggested line could never appear.
+  if (r.recommendedAction != null) {
+    const e = set("recommendedAction",
+      boundedString(r.recommendedAction, "aiResearch.recommendedAction", MAX_RECOMMENDED_ACTION_LENGTH));
+    if (e) return e;
   }
   for (const k of ["researchedAt", "model"] as const) {
     if (r[k] != null) {

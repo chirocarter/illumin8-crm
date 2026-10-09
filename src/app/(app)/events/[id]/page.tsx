@@ -10,6 +10,7 @@ import { saveEventOutcome } from "@/app/actions";
 import { fmtDate, fmtDateTime, fmtMoney, todayISO } from "@/lib/dates";
 import { qs } from "@/lib/metrics";
 import { parseEventResearch } from "@/lib/agent-event-review";
+import OrganizerContact from "@/components/OrganizerContact";
 
 export const dynamic = "force-dynamic";
 
@@ -186,7 +187,8 @@ export default async function EventDetail({ params, searchParams }: {
                     ["Fit score", event.aiFitScore === null ? "Not scored" : String(event.aiFitScore)],
                     ["Confidence", research.confidence ?? "—"],
                     ["Organizer", research.organizer ?? "—"],
-                    ["Organizer contact", research.organizerContact ?? "—"],
+                    // Untrusted research text — see OrganizerContact.
+                    ["Organizer contact", <OrganizerContact key="oc" text={research.organizerContact} />],
                     ["Vendor status", research.vendorStatus ?? "—"],
                     ["Vendor cost", research.vendorCost ?? "—"],
                     ["Apply by", event.applicationDeadline
@@ -215,6 +217,14 @@ export default async function EventDetail({ params, searchParams }: {
                 )}
 
                 {research.summary && <p className="mt-3 text-sm text-soft">{research.summary}</p>}
+
+                {/* Advice from the agent, kept after review so it doesn't vanish
+                    with the queue card. It never acts on its own. */}
+                {research.recommendedAction && (
+                  <p className="mt-3 rounded-xl bg-well px-3 py-2 text-xs text-soft">
+                    <span className="font-medium text-ink">Suggested: </span>{research.recommendedAction}
+                  </p>
+                )}
 
                 {research.sources.length > 0 && (
                   <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">

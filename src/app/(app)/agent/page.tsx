@@ -5,6 +5,7 @@ import {
 import { requireUser } from "@/lib/auth";
 import { resolveCityView } from "@/lib/scope";
 import CityTabs from "@/components/CityTabs";
+import OrganizerContact from "@/components/OrganizerContact";
 import type { SP } from "@/lib/lists";
 import { agentDashboard } from "@/lib/agent-dashboard";
 import {
@@ -371,9 +372,18 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
 
                 {e.summary && <p className="mt-2 text-sm text-soft">{e.summary}</p>}
 
-                {(e.organizer || e.vendorStatus || e.vendorCost || e.potential) && (
+                {(e.organizer || e.organizerContact || e.vendorStatus || e.vendorCost || e.potential) && (
                   <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-4">
                     {e.organizer && <div><dt className="text-faint">Organizer</dt><dd>{e.organizer}</dd></div>}
+                    {/* Untrusted research text: escaped, with only validated
+                        http(s) / mailto / tel pieces made into links. Shown for
+                        reference — approving the event contacts nobody. */}
+                    {e.organizerContact && (
+                      <div className="col-span-2 min-w-0">
+                        <dt className="text-faint">Organizer contact</dt>
+                        <dd><OrganizerContact text={e.organizerContact} /></dd>
+                      </div>
+                    )}
                     {e.vendorStatus && <div><dt className="text-faint">Vendor status</dt><dd>{e.vendorStatus}</dd></div>}
                     {e.vendorCost && <div><dt className="text-faint">Cost</dt><dd>{e.vendorCost}</dd></div>}
                     {e.potential && Object.entries(e.potential).map(([k, v]) => (

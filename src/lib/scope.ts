@@ -135,16 +135,21 @@ export async function selectableUsers() {
  * Returns the cities worth offering as tabs, so a single-market install shows
  * no selector at all rather than a group of one.
  */
-export async function resolveCityView(sp: SP): Promise<{
-  cityId: number | null;
-  cityName: string;
-  options: City[];
-  canChoose: boolean;
-}> {
+export async function resolveCityView(sp: SP): Promise<CityView> {
   const [user, cities, current] = await Promise.all([getSessionUser(), allCities(), activeCity()]);
-  const isAdmin = user?.role === "admin";
   const raw = Array.isArray(sp.city) ? sp.city[0] : sp.city;
+  return cityViewFor(user, cities, current, raw);
+}
 
+export type CityView = { cityId: number | null; cityName: string; options: City[]; canChoose: boolean };
+type Viewer = { role: string; cityId: number | null } | null | undefined;
+
+/**
+ * The decision behind resolveCityView, with the session already read — pure,
+ * so the admin/member rule can be tested without a request.
+ */
+export function cityViewFor(user: Viewer, cities: City[], current: City | null, raw: string | undefined): CityView {
+  const isAdmin = user?.role === "admin";
   if (!isAdmin) {
     const mine = cities.find((c) => c.id === user?.cityId) ?? current;
     return {
@@ -206,7 +211,11 @@ export function scopeConds(t: Owned, scope?: { cityId?: number | null; userId?: 
  * predating the city columns (cityId null) stay reachable so nothing 404s.
  */
 export async function canAccessCity(cityId: number | null | undefined): Promise<boolean> {
-  const user = await getSessionUser();
+  return userCanAccessCity(await getSessionUser(), cityId);
+}
+
+/** The rule behind canAccessCity, with the session already read — pure, so it can be tested. */
+export function userCanAccessCity(user: Viewer, cityId: number | null | undefined): boolean {
   if (!user) return false;
   if (user.role === "admin") return true;
   if (cityId == null) return true;
