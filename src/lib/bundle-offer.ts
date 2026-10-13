@@ -28,7 +28,7 @@ export const BUNDLE_OFFER = {
 
 /** What we do — the "learn more" side, condensed from illumin8chiro.com. */
 export const ABOUT_ILLUMIN8 = {
-  tagline: "Restore your spine. Light up your life.",
+  tagline: "Illuminate your life.",
   summary:
     "Many offices focus on temporary relief. We focus on restoring the structure and function of the spine — correcting posture, rebuilding spinal curves and improving nervous-system function, so your body can move and heal long term.",
   steps: [
