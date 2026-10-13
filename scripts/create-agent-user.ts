@@ -4,6 +4,11 @@
  *   npx tsx scripts/create-agent-user.ts --city "Albuquerque"
  *   npx tsx scripts/create-agent-user.ts --city "McKinney" --apply
  *   npx tsx scripts/create-agent-user.ts --city "Albuquerque" --rotate --apply --prod
+ *   … --key-file <path>   write the new key to <path> instead of printing it
+ *
+ * With --prod, both creation and rotation ask the LIVE deployment whether the
+ * new key authenticates — as the right city — before reporting success, and
+ * undo the write if it doesn't.
  *
  * TARGET IS CHOSEN BY FLAG, NEVER BY ENVIRONMENT. Without --prod this works on
  * the local database even when .env.turso is present; see src/db/target.ts.
@@ -27,6 +32,62 @@ const flag = (name: string): string | null => {
 };
 const APPLY = args.includes("--apply");
 const ROTATE = args.includes("--rotate");
+/**
+ * Write the new credential to this file (owner-only permissions) instead of
+ * printing it. For handing a key to whoever stores it without the key ever
+ * appearing in a terminal transcript, a CI log or an assistant's tool output.
+ * Refuses to overwrite an existing file.
+ */
+const KEY_FILE = flag("key-file");
+
+/**
+ * Claim KEY_FILE before anything is written to the database. If the file can't
+ * be created (it exists, or the folder isn't writable) the run stops HERE —
+ * otherwise a rotation could replace the working credential and then fail to
+ * hand over the new one, leaving the agent with neither.
+ */
+let keyFileClaimed = false;
+async function claimKeyFile(): Promise<boolean> {
+  if (!KEY_FILE || !APPLY) return true;
+  const fs = await import("fs");
+  try {
+    fs.writeFileSync(KEY_FILE, "", { flag: "wx", mode: 0o600 });
+    keyFileClaimed = true;
+    return true;
+  } catch (err) {
+    console.error(`Refusing to start: cannot create ${KEY_FILE} (${err instanceof Error ? err.message : String(err)}).`);
+    console.error("It must not exist yet, and its folder must be writable. Nothing was changed.");
+    return false;
+  }
+}
+
+/** Remove a claimed key file that never received a key (the run failed). */
+async function releaseEmptyKeyFile() {
+  if (!keyFileClaimed || !KEY_FILE) return;
+  const fs = await import("fs");
+  try { if (fs.statSync(KEY_FILE).size === 0) fs.unlinkSync(KEY_FILE); } catch { /* already gone */ }
+}
+
+/** Hand over a freshly issued credential: to KEY_FILE if given, else stdout. */
+async function deliverKey(rawKey: string, heading: string): Promise<boolean> {
+  if (KEY_FILE) {
+    const fs = await import("fs");
+    try {
+      fs.writeFileSync(KEY_FILE, rawKey + "\n", { mode: 0o600 }); // claimed, empty, ours
+    } catch (err) {
+      console.error(`Could not write ${KEY_FILE}: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
+    console.log(`${heading}: written to ${KEY_FILE} (not printed). Store it, then delete the file.`);
+    return true;
+  }
+  console.log("─".repeat(72));
+  console.log(`${heading} — shown once, not recoverable. Store it now.`);
+  console.log("─".repeat(72));
+  console.log(rawKey);
+  console.log("─".repeat(72));
+  return true;
+}
 
 /**
  * The base URL of the deployed runtime a --prod credential must work against.
@@ -91,10 +152,12 @@ async function main(): Promise<number> {
   // rather than merely unselected.
   const target = resolveTarget({
     command: "create-agent-user",
-    known: ["--city", "--apply", "--rotate", "--verify-url"],
+    known: ["--city", "--apply", "--rotate", "--verify-url", "--key-file"],
     operation: `${ROTATE ? "ROTATE the bearer credential for" : "CREATE an agent identity for"} ` +
       `"${cityName}"${APPLY ? "" : "  (DRY RUN — nothing will be written)"}`,
   });
+
+  if (!(await claimKeyFile())) return 1;
 
   // Imported dynamically so loadEnvLocal() has already run — ES imports would
   // evaluate the db module before the environment was populated.
@@ -183,12 +246,7 @@ async function main(): Promise<number> {
 
     console.log(`rotated credential for agent #${existing.id} (${city.name})`);
     console.log("The previous credential stopped working immediately.\n");
-    console.log("-".repeat(72));
-    console.log("NEW BEARER CREDENTIAL - shown once, not recoverable. Store it now.");
-    console.log("-".repeat(72));
-    console.log(newKey);
-    console.log("-".repeat(72));
-    return 0;
+    return (await deliverKey(newKey, "NEW BEARER CREDENTIAL")) ? 0 : 1;
   }
 
   if (existing) {
@@ -228,12 +286,24 @@ async function main(): Promise<number> {
     agentKeyHash: keyHash,
   }).returning();
 
+  // PREFLIGHT for a new identity too, not only for rotation. The same secret
+  // drift that broke a rotated key would issue a brand-new key the runtime
+  // rejects — and report success. If the live runtime won't accept it, the row
+  // just created is removed again: nothing else references a user this new.
+  if (target.prod) {
+    const verdict = await verifyAgainstRuntime(rawKey, city.name);
+    if (!verdict.ok) {
+      await db.delete(s.users).where(eq(s.users.id, row.id));
+      console.error(`\nPREFLIGHT FAILED — ${verdict.why}`);
+      console.error(`The new identity #${row.id} has been REMOVED; nothing was created.`);
+      console.error("Align the local AGENT_KEY_SECRET with production's, then run this again.");
+      return 1;
+    }
+    console.log(`preflight: the live runtime accepted the new credential as "${verdict.agent}" in ${verdict.city}`);
+  }
+
   console.log(`created agent user #${row.id} for ${city.name}\n`);
-  console.log("─".repeat(72));
-  console.log("BEARER CREDENTIAL — shown once, not recoverable. Store it now.");
-  console.log("─".repeat(72));
-  console.log(rawKey);
-  console.log("─".repeat(72));
+  if (!(await deliverKey(rawKey, "BEARER CREDENTIAL"))) return 1;
   console.log("Use as:  Authorization: Bearer <credential>");
   console.log("Keep it out of git, chat logs and screenshots.");
   return 0;
@@ -241,4 +311,5 @@ async function main(): Promise<number> {
 
 main()
   .then((code) => { process.exitCode = code ?? 0; })
-  .catch((err) => { console.error(err instanceof Error ? err.message : String(err)); process.exitCode = 1; });
+  .catch((err) => { console.error(err instanceof Error ? err.message : String(err)); process.exitCode = 1; })
+  .finally(releaseEmptyKeyFile);
