@@ -16,6 +16,24 @@ const clean = (fd: FormData, key: string, max: number) =>
 type Campaign = typeof s.campaigns.$inferSelect;
 
 /**
+ * The preferred clinic a public form sent, if it's a real, active one — and,
+ * when `cityId` is given, one in that city. Anything else is dropped rather
+ * than stored: an id that names no clinic would otherwise fail the lead's
+ * foreign key and lose the whole submission.
+ */
+async function preferredLocation(fd: FormData, cityId?: number | null): Promise<number | null> {
+  const n = Number(fd.get("preferredLocationId"));
+  if (!Number.isInteger(n) || n <= 0) return null;
+  const loc = await db.query.locations.findFirst({
+    where: and(eq(s.locations.id, n), eq(s.locations.active, true)),
+    columns: { id: true, cityId: true },
+  });
+  if (!loc) return null;
+  if (cityId && loc.cityId !== cityId) return null;
+  return loc.id;
+}
+
+/**
  * The two screening intake forms. Always a lead (source "Screening", attributed
  * to the campaign AND its event); for "pick a time", also one booking on the
  * campaign's time sheet.
@@ -101,6 +119,10 @@ export async function submitPublicLead(fd: FormData) {
   const formType = normalizePublicForm(campaign!.publicForm);
   const isBusiness = formType === "partnership" || formType === "lunch";
   const isContact = formType === "contact";
+  // "Learn More or Book $50": only its learn-more half posts here (booking goes
+  // to Stripe), and that half is a contact form — same rules, same promise.
+  const isBundle = formType === "bundle";
+  const contactLike = isContact || isBundle;
 
   // There's no session here, so ownership is inherited from the campaign whose
   // QR code was scanned: its city, and whoever created it.
@@ -121,7 +143,7 @@ export async function submitPublicLead(fd: FormData) {
   // thing it can't do without. Seven digits rules out "n/a" and similar while
   // still accepting an international number, which formatPhone leaves as typed.
   // The other forms keep their original rule: a name plus any way to reach you.
-  if (isContact) {
+  if (contactLike) {
     if (!firstName || phoneKey(phone).length < 7) redirect(`/join/${token}?error=1`);
   } else if (!firstName || (!phone && !email)) {
     redirect(`/join/${token}?error=1`);
@@ -131,6 +153,9 @@ export async function submitPublicLead(fd: FormData) {
     // First in the notes, so whoever calls back sees it before anything else.
     // Only a ticked box is recorded: an unticked one can't tell "no" from "skipped".
     if (fd.get("existingPatient") === "yes") detailBits.push("Already an Illumin8 patient");
+  }
+  if (isBundle) detailBits.push("Wants to learn more before booking the $50 new-patient bundle");
+  if (contactLike) {
     const message = clean(fd, "message", 1000);
     if (message) detailBits.push(`Question / comment: ${message}`);
   }
@@ -211,16 +236,13 @@ export async function submitPublicLead(fd: FormData) {
     source: "QR Code",
     campaignId: campaign!.id,
     accountId,
-    preferredLocationId: (() => {
-      const n = Number(fd.get("preferredLocationId"));
-      return Number.isFinite(n) && n > 0 ? n : null;
-    })(),
+    preferredLocationId: await preferredLocation(fd, isBundle ? campaign!.cityId : undefined),
     interestLevel: "Warm",
     apptStatus: "Not Contacted",
-    notes: `Self-submitted via ${isContact ? "general contact form" : "QR sign-up"} (${campaign!.name})${detailBits.length ? " — " + detailBits.join(" · ") : ""}`,
+    notes: `Self-submitted via ${isContact ? "general contact form" : isBundle ? "\"Learn More or Book $50\" form" : "QR sign-up"} (${campaign!.name})${detailBits.length ? " — " + detailBits.join(" · ") : ""}`,
     ...own,
   });
 
   // The thank-you copy differs: a contact form isn't a sign-up to be scheduled.
-  redirect(isContact ? "/join/thanks?f=contact" : "/join/thanks");
+  redirect(contactLike ? "/join/thanks?f=contact" : "/join/thanks");
 }

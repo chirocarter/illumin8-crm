@@ -159,6 +159,8 @@ export default async function CampaignDetail({ params, searchParams }: {
                     ? "Screening intake — people confirm they want to take part in the spinal health screening, with name, phone, email and current symptoms. Each becomes a lead, attributed to this campaign and its event."
                     : formType === "screening_slots"
                     ? "Screening intake with times — the same, plus a 10-minute window. Bookings fill the time sheet here and on the event; when every window is full, people join a waitlist."
+                    : formType === "bundle"
+                    ? "Learn More or Book $50 — two choices. \"Book now\" goes to the $50 Stripe checkout, then scheduling at illumin8chiro.com/events; Stripe handles those, so they don't appear here. \"Learn more first\" collects contact details and creates a lead, attributed to this campaign."
                     : "Lunch & learn form — asks about team size, space, and timing. Scans create the business under Accounts, a contact, and a lead, all attributed to this campaign."}
                 </p>
                 <p className="mt-1.5 rounded-full bg-hairline px-2.5 py-0.5 text-xs font-medium text-soft">
@@ -167,6 +169,7 @@ export default async function CampaignDetail({ params, searchParams }: {
                     : formType === "contact" ? "Collects: contact details, existing patient?, question"
                     : formType === "screening" ? "Collects: screening sign-up + symptoms"
                     : formType === "screening_slots" ? "Collects: screening sign-up, symptoms + a time"
+                    : formType === "bundle" ? "Collects: learn-more contacts (bookings go to Stripe)"
                     : "Collects: lunch & learn interest"}
                 </p>
               </div>

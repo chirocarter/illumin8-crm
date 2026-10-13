@@ -250,9 +250,10 @@ export const PUBLIC_FORM_TYPES = [
   { value: "contact", label: "General contact", hint: "Name, phone, email, an \"already a patient?\" box and an optional question → creates a lead." },
   { value: "screening", label: "Screening intake — interest", hint: "Confirms they want to join a spinal health screening; name, phone, email and current symptoms → creates a lead." },
   { value: "screening_slots", label: "Screening intake — pick a time", hint: "The same, plus a 10-minute time window. Bookings fill a time sheet on the campaign and its event." },
+  { value: "bundle", label: "Learn More or Book $50", hint: "Two choices: book the $50 new-patient bundle (Stripe checkout, then scheduling), or leave contact details to learn more first → creates a lead." },
 ] as const;
 
-export type PublicFormType = "patient" | "partnership" | "lunch" | "contact" | "screening" | "screening_slots";
+export type PublicFormType = "patient" | "partnership" | "lunch" | "contact" | "screening" | "screening_slots" | "bundle";
 
 /** Normalize stored/legacy values to a current form type. */
 export function normalizePublicForm(value: string | null | undefined): PublicFormType {
@@ -261,6 +262,7 @@ export function normalizePublicForm(value: string | null | undefined): PublicFor
   if (value === "contact") return "contact";
   if (value === "screening") return "screening";
   if (value === "screening_slots") return "screening_slots";
+  if (value === "bundle") return "bundle";
   return "patient"; // "patient", "person", null, anything else
 }
 

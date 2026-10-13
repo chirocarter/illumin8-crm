@@ -1,5 +1,5 @@
 // PUBLIC page — what people see when they scan a campaign QR code. No login,
-// mobile-first, styled like a mini landing page. Six form variants:
+// mobile-first, styled like a mini landing page. Seven form variants:
 //   patient      → new-patient sign-up (lead)
 //   partnership  → a business that wants to partner (account + contact + lead)
 //   lunch        → a business interested in a lunch & learn (account + contact + lead)
@@ -9,6 +9,9 @@
 //                  <event>": name, phone, email, current symptoms (lead)
 //   screening_slots → the same, plus one 10-minute window (lead + booking on
 //                  the campaign's time sheet); a waitlist when every window is full
+//   bundle       → "Learn More or Book $50": two choices. Book now → the $50
+//                  Stripe checkout (then scheduling); Learn more first → a
+//                  contact form (lead). Offer copy: lib/bundle-offer.ts
 //
 // Both screening forms open with a sample neck EMG read-out (NeckScanPreview)
 // so people see what the screening is before they sign up.
@@ -24,6 +27,8 @@ import { db, schema as s } from "@/db";
 import { eq } from "drizzle-orm";
 import { Icon } from "@/components/icons";
 import { NeckScanPreview } from "@/components/NeckScanPreview";
+import { BundleGraphic, LearnMoreIntro } from "@/components/BundleOffer";
+import { BUNDLE_OFFER } from "@/lib/bundle-offer";
 import {
   normalizePublicForm, isScreeningForm, PARTNERSHIP_INTERESTS, SCREENING_SYMPTOMS, type PublicFormType,
 } from "@/lib/taxonomy";
@@ -76,6 +81,14 @@ const CONFIG: Record<PublicFormType, { headline: string; sub: string; cta: strin
     cta: "Reserve my time",
     privacy: "We'll only use this to plan your screening and follow up. No spam.",
   },
+  // "Learn More or Book $50": the CTA and privacy line belong to the learn-more
+  // form; booking leaves this page for Stripe.
+  bundle: {
+    headline: `Your first two visits, $${BUNDLE_OFFER.price}`,
+    sub: "A complete look at your spine — exam, scans and a doctor-guided plan.",
+    cta: "Reach out to me",
+    privacy: "We'll only use this to get back to you. No spam.",
+  },
 };
 
 // text-base (16px) is load-bearing, not a style choice: below 16px iPhone
@@ -103,6 +116,12 @@ export default async function JoinPage({ params, searchParams }: {
   const headline = isBusiness ? (campaign.offer?.trim() || cfg.headline) : cfg.headline;
 
   const isContact = formType === "contact";
+  const isBundle = formType === "bundle";
+  // The learn-more half of the bundle form collects what the contact form does.
+  const contactLike = isContact || isBundle;
+  // The campaign's own city only — a printout in Albuquerque shouldn't offer
+  // another market's clinics.
+  const cityLocations = locations.filter((l) => !campaign.cityId || l.cityId === campaign.cityId);
   const isScreening = isScreeningForm(formType);
   const screening: ScreeningState | null = isScreening ? await screeningState(campaign) : null;
   const windows = screening?.windows ?? [];
@@ -129,7 +148,7 @@ export default async function JoinPage({ params, searchParams }: {
     error === "slot" ? "Sorry — that time was just taken. Please pick another."
     : error === "pick" ? "Please pick a time for your screening."
     : isScreening ? "Please confirm you'd like to take part, and add your first and last name and a phone number."
-    : isContact ? "Please add your first name and a phone number."
+    : contactLike ? "Please add your first name and a phone number."
     : isBusiness ? "Please add your business name, your name, and a phone number or email."
     : "Please add your name and a phone number or email.";
 
@@ -146,15 +165,59 @@ export default async function JoinPage({ params, searchParams }: {
           <p className="relative text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/85">Illumin8 Chiropractic</p>
           <h1 className="relative mx-auto mt-2 max-w-xs break-words text-[1.55rem] font-bold leading-[1.15] tracking-tight">{headline}</h1>
           <p className="relative mx-auto mt-2.5 max-w-xs break-words text-sm text-white/90">{sub}</p>
-          <div className="relative mt-4 flex flex-wrap justify-center gap-1.5">
-            {chips.map((c) => (
-              <span key={c} className="rounded-full bg-white/15 px-2.5 py-1 text-[0.7rem] font-medium ring-1 ring-white/25">{c}</span>
-            ))}
-          </div>
+          {isBundle ? (
+            // The two choices, up front. Each jumps to its own section below.
+            <div className="relative mx-auto mt-5 grid max-w-xs grid-cols-2 gap-2">
+              <a href="#book" className="rounded-full bg-white px-3 py-2.5 text-sm font-semibold text-[#b45309] shadow-sm transition-transform active:scale-[0.98]">
+                Book now · ${BUNDLE_OFFER.price}
+              </a>
+              <a href="#learn" className="rounded-full bg-white/15 px-3 py-2.5 text-sm font-semibold text-white ring-1 ring-white/40 transition-transform active:scale-[0.98]">
+                Learn more first
+              </a>
+            </div>
+          ) : (
+            <div className="relative mt-4 flex flex-wrap justify-center gap-1.5">
+              {chips.map((c) => (
+                <span key={c} className="rounded-full bg-white/15 px-2.5 py-1 text-[0.7rem] font-medium ring-1 ring-white/25">{c}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Screening forms show what the screening is before asking for a yes. */}
         {isScreening && !screening?.closed && <NeckScanPreview />}
+
+        {/* Option 1: book the bundle now — pay through Stripe, then schedule. */}
+        {isBundle && (
+          <section id="book" className="scroll-mt-4 px-5 pt-6 sm:px-6">
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[#b45309]">Option 1 · Book now</p>
+            <h2 className="mt-1 text-[1.15rem] font-bold leading-snug tracking-tight text-neutral-900">
+              Take advantage of the ${BUNDLE_OFFER.price} two-visit bundle
+            </h2>
+            <p className="mt-1.5 text-[0.9rem] leading-relaxed text-neutral-600">
+              Our ${BUNDLE_OFFER.regularPrice} new-patient bundle, for ${BUNDLE_OFFER.price}: two visits that show what&rsquo;s really going on
+              with your spine &mdash; and what to do about it.
+            </p>
+            <div className="mt-3"><BundleGraphic /></div>
+            <a href={BUNDLE_OFFER.bookingUrl}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#d97706] py-3.5 text-[0.95rem] font-semibold text-white shadow-sm transition-all hover:bg-[#b45309] active:scale-[0.99]">
+              Book my ${BUNDLE_OFFER.price} bundle <span aria-hidden>→</span>
+            </a>
+            <p className="mt-2 text-center text-xs text-neutral-500">
+              Secure checkout with Stripe. After you pay, you&rsquo;ll choose your location and a time.
+            </p>
+          </section>
+        )}
+
+        {/* Option 2: not ready to book — what we do, then the contact form. */}
+        {isBundle && (
+          <>
+            <div className="mx-5 mt-7 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.14em] text-neutral-400 sm:mx-6">
+              <span className="h-px flex-1 bg-neutral-200" />or<span className="h-px flex-1 bg-neutral-200" />
+            </div>
+            <LearnMoreIntro />
+          </>
+        )}
 
         {screening?.closed ? (
           <div className="px-6 pb-10 pt-8 text-center">
@@ -165,7 +228,7 @@ export default async function JoinPage({ params, searchParams }: {
           </div>
         ) : (
         /* Form */
-        <form action={submitPublicLead} className="space-y-3.5 px-5 pb-8 pt-6 sm:px-6 sm:pb-7">
+        <form action={submitPublicLead} className={`space-y-3.5 px-5 pb-8 sm:px-6 sm:pb-7 ${isBundle ? "pt-3" : "pt-6"}`}>
           <input type="hidden" name="token" value={token} />
           {/* honeypot — hidden from humans */}
           <input type="text" name="company" tabIndex={-1} autoComplete="off" aria-hidden
@@ -210,8 +273,8 @@ export default async function JoinPage({ params, searchParams }: {
           {/* Stacked on a phone: side by side, an email address has ~140px. */}
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
             <label className="block">
-              <span className={labelCls}>{isContact || isScreening ? "Phone *" : "Phone"}</span>
-              <input name="phone" type="tel" required={isContact || isScreening} inputMode="tel"
+              <span className={labelCls}>{contactLike || isScreening ? "Phone *" : "Phone"}</span>
+              <input name="phone" type="tel" required={contactLike || isScreening} inputMode="tel"
                 className={inputCls} autoComplete="tel" placeholder="(505) 555-0123" />
             </label>
             <label className="block">
@@ -228,11 +291,21 @@ export default async function JoinPage({ params, searchParams }: {
             </label>
           )}
 
-          {isContact && (
+          {isBundle && cityLocations.length > 0 && (
             <label className="block">
-              <span className={labelCls}>Questions or comments (optional)</span>
+              <span className={labelCls}>Closest location (optional)</span>
+              <select name="preferredLocationId" defaultValue="" className={inputCls}>
+                <option value="">Not sure yet</option>
+                {cityLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </label>
+          )}
+
+          {contactLike && (
+            <label className="block">
+              <span className={labelCls}>{isBundle ? "Anything you'd like to know? (optional)" : "Questions or comments (optional)"}</span>
               <textarea name="message" rows={3} maxLength={1000} className={inputCls}
-                placeholder="Anything you'd like us to know?" />
+                placeholder={isBundle ? "e.g. Does insurance cover it? What happens at the first visit?" : "Anything you'd like us to know?"} />
             </label>
           )}
 
