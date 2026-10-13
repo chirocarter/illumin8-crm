@@ -16,21 +16,23 @@ export const BUNDLE_OFFER = {
   regularPrice: 97,
   visits: [
     {
-      title: "Exam & scans",
+      title: "Chiropractic exam & scans",
       items: ["Consultation & health history", "Posture analysis", "ThermPix thermal scan & surface EMG"],
     },
     {
-      title: "Results & your plan",
-      items: ["Your doctor walks you through every result", "A personalized care plan"],
+      title: "Results & first adjustment",
+      items: ["Your chiropractor walks you through every result", "A personalized care plan", "Your first chiropractic adjustment"],
     },
   ],
+  /** One line for the page: what the two visits add up to. */
+  summary: "a full chiropractic exam and scans, then your results, your care plan and your first adjustment.",
 } as const;
 
 /** What we do — the "learn more" side, condensed from illumin8chiro.com. */
 export const ABOUT_ILLUMIN8 = {
   tagline: "Illuminate your life.",
   summary:
-    "Many offices focus on temporary relief. We focus on restoring the structure and function of the spine — correcting posture, rebuilding spinal curves and improving nervous-system function, so your body can move and heal long term.",
+    "Many chiropractic offices focus on temporary relief. Our chiropractors focus on restoring the structure and function of the spine — correcting posture, rebuilding spinal curves and improving nervous-system function, so your body can move and heal long term.",
   steps: [
     { title: "Advanced posture & spinal analysis", body: "Posture patterns, inflammation, spinal curves and range of motion." },
     { title: "Corrective alignment & education", body: "A care plan built to restore alignment — and you'll understand every step." },

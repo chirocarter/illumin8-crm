@@ -85,7 +85,7 @@ const CONFIG: Record<PublicFormType, { headline: string; sub: string; cta: strin
   // form; booking leaves this page for Stripe.
   bundle: {
     headline: `Your first two visits, $${BUNDLE_OFFER.price}`,
-    sub: "A complete look at your spine — exam, scans and a doctor-guided plan.",
+    sub: "Chiropractic care that starts with a complete look at your spine — then your first adjustment.",
     cta: "Reach out to me",
     privacy: "We'll only use this to get back to you. No spam.",
   },
@@ -195,8 +195,7 @@ export default async function JoinPage({ params, searchParams }: {
               Take advantage of the ${BUNDLE_OFFER.price} two-visit bundle
             </h2>
             <p className="mt-1.5 text-[0.9rem] leading-relaxed text-neutral-600">
-              Our ${BUNDLE_OFFER.regularPrice} new-patient bundle, for ${BUNDLE_OFFER.price}: two visits that show what&rsquo;s really going on
-              with your spine &mdash; and what to do about it.
+              Our ${BUNDLE_OFFER.regularPrice} new-patient chiropractic bundle, for ${BUNDLE_OFFER.price}: {BUNDLE_OFFER.summary}
             </p>
             <div className="mt-3"><BundleGraphic /></div>
             <a href={BUNDLE_OFFER.bookingUrl}
