@@ -5,7 +5,7 @@ import { PageHeader, Card, CardHeader, DrillNumber, pillSm } from "@/components/
 import PrintButton from "@/components/PrintButton";
 import ScopeToggle from "@/components/ScopeToggle";
 import { metricValues, qs } from "@/lib/metrics";
-import { OPEN_STAGES, IN_PERSON_CALL_WEIGHT } from "@/lib/taxonomy";
+import { OPEN_STAGES } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/auth";
 import { activeCity, resolveScope, scopeConds, selectableUsers } from "@/lib/scope";
 import {
@@ -155,16 +155,6 @@ export default async function PerformanceReport({ searchParams }: { searchParams
   const delta = (key: string) => m[key].value - mPrev[key].value;
   const money = (v: number) => "$" + Math.round(v).toLocaleString("en-US");
 
-  // Composition of Calls For Reporting Purpose. The headline is a single
-  // number, but an admin reading the PDF should be able to see what is inside
-  // it without asking, so the parts are shown alongside as arithmetic that
-  // reproduces it. They are the report's own Phone Calls and In-Person Visits
-  // metrics — the same rows the headline is built from — and each part links
-  // to exactly the activities it counts.
-  const callBreakdown = [
-    { label: "Phone Calls", count: m.phone_calls.value, weight: 1, href: m.phone_calls.href },
-    { label: "In-Person Visits", count: m.in_person_visits.value, weight: IN_PERSON_CALL_WEIGHT, href: m.in_person_visits.href },
-  ];
 
   // Goal pace: weekly targets scaled to the period length (a month ≈ 4.3 weeks).
   //
@@ -324,43 +314,19 @@ export default async function PerformanceReport({ searchParams }: { searchParams
       </div>
 
       {/* Calls For Reporting Purpose — the headline leadership asks for, so it
-          leads the report on screen and on paper. print-keep stops it splitting
-          across a page break, which would strand the total from its parts. */}
+          leads the report on screen and on paper, as one number. print-keep
+          stops the card splitting across a page break. */}
       <Card className="mb-5 print-keep print-callout border-2 border-accent/40 p-5">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-accent-deep">
-              Calls For Reporting Purpose
-            </p>
-            <Link href={m.calls_for_reporting.href}
-              className="mt-1 block text-[2.75rem] font-semibold leading-none tracking-tight text-ink transition-colors hover:text-accent-deep">
-              {m.calls_for_reporting.value}
-            </Link>
-            <p className="mt-2 text-xs text-soft">
-              <Delta diff={delta("calls_for_reporting")} /> <span className="text-faint">vs {prevLabel}</span>
-            </p>
-            <p className="mt-1 text-xs text-faint">Each in-person visit counts as {IN_PERSON_CALL_WEIGHT} calls.</p>
-          </div>
-
-          {/* The parts, each drilling into its own records and showing its own
-              count, with the weight beside it. Worked through, they give the
-              headline — the number can be checked rather than taken on faith. */}
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
-            {callBreakdown.map((part, i) => (
-              <div key={part.label} className="flex items-center gap-2">
-                {i > 0 && <span className="text-lg font-light text-faint">+</span>}
-                <Link href={part.href}
-                  className="rounded-xl bg-well px-3 py-2 text-center transition-colors hover:bg-hairline">
-                  <span className="block text-lg font-semibold leading-none">
-                    {part.count}
-                    {part.weight !== 1 && <span className="text-sm font-medium text-soft"> × {part.weight}</span>}
-                  </span>
-                  <span className="mt-1 block text-[0.65rem] font-medium uppercase tracking-wider text-faint">{part.label}</span>
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-accent-deep">
+          Calls For Reporting Purpose
+        </p>
+        <Link href={m.calls_for_reporting.href}
+          className="mt-1 block w-fit text-[2.75rem] font-semibold leading-none tracking-tight text-ink transition-colors hover:text-accent-deep">
+          {m.calls_for_reporting.value}
+        </Link>
+        <p className="mt-2 text-xs text-soft">
+          <Delta diff={delta("calls_for_reporting")} /> <span className="text-faint">vs {prevLabel}</span>
+        </p>
       </Card>
 
       {/* Headline money */}
@@ -563,11 +529,9 @@ export default async function PerformanceReport({ searchParams }: { searchParams
 
       <p className="mt-4 text-xs text-faint print:mt-5 print:border-t print:border-line print:pt-3">
         <span className="hidden font-medium text-soft print:inline">How these numbers are defined — </span>
-        <strong className="font-medium text-soft">Calls For Reporting Purpose</strong> = phone calls + {IN_PERSON_CALL_WEIGHT} × in-person visits,
-        counted from logged activities. Phone calls are Phone Call and Voicemail activities. In-person visits are In-Person Visit,
-        Drop Box Visit, Meeting, Lunch and Learn, Screening Event and Networking activities — visits, drop box pickups, and meetings
-        and events attended — each worth {IN_PERSON_CALL_WEIGHT} calls. Each counts once, for whoever logged it; the Meetings Attended
-        and Events Held lines below count the same work from the calendar and are not added on top.
+        <strong className="font-medium text-soft">Calls For Reporting Purpose</strong> is counted from logged activities — phone calls
+        and voicemails, in-person visits, drop box pickups, and meetings and events attended — credited to whoever logged them. The
+        Meetings Attended and Events Held lines below count the same work from the calendar and are not added on top.
         Definitions match the Command Center and weekly reports — one source of truth. “Booked” counts appointments created in
         the period; “charged” and “collected” sum their amounts. Goal targets are the weekly goals from Settings, scaled to the period length.
         {period === "custom"
