@@ -61,11 +61,11 @@ before(async () => {
   mckLocation = one<{ id: number }>("select id from locations where name = 'McKinney'").id;
 });
 
-test("offer: books through the department's Stripe link, at $50 (regularly $97)", () => {
+test("offer: books through the department's Stripe link, at $50 (regularly $220)", () => {
   const o = m.offer.BUNDLE_OFFER;
   assert.equal(o.bookingUrl, "https://book.stripe.com/bJe5kD8KMbHxcKM0Qt5gc03");
   assert.equal(o.price, 50);
-  assert.equal(o.regularPrice, 97);
+  assert.equal(o.regularPrice, 220);
   assert.equal(o.visits.length, 2);
 });
 
@@ -77,7 +77,7 @@ test("page: two choices up front; Book now goes to Stripe, Learn more to the for
   assert.match(html, /href="#learn"[^>]*>Learn more first</);
   const stripeLinks = [...html.matchAll(/href="(https:\/\/[^"]+)"/g)].map((x) => x[1]);
   assert.deepEqual(stripeLinks, ["https://book.stripe.com/bJe5kD8KMbHxcKM0Qt5gc03"], "one outbound link, the Stripe checkout");
-  assert.match(html, /Regularly \$97, now/);
+  assert.match(html, /Regularly \$220, now/);
   assert.match(html, /Option 2 · Learn more first/);
   assert.match(html.match(/<input[^>]*name="phone"[^>]*>/)?.[0] ?? "", /\brequired=""/, "phone is required");
   assert.match(html, /<option value="\d+">NE Heights<\/option>/);

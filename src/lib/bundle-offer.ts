@@ -1,4 +1,4 @@
-// The "Learn More or Book $50" form's offer: the $97 two-appointment
+// The "Learn More or Book $50" form's offer: the $220 two-appointment
 // new-patient exam bundle, at $50 for printouts from the outreach department.
 //
 // Everything a person reads about the offer comes from here, so a price or
@@ -13,7 +13,7 @@
 export const BUNDLE_OFFER = {
   bookingUrl: "https://book.stripe.com/bJe5kD8KMbHxcKM0Qt5gc03",
   price: 50,
-  regularPrice: 97,
+  regularPrice: 220,
   visits: [
     {
       title: "Chiropractic exam & scans",

@@ -1,7 +1,7 @@
 // The "$50 for 2 visits" offer card on the "Learn More or Book $50" form
 // (/join/[token], form type `bundle`).
 //
-// A price block ($50, regularly $97) over two visit tiles, each with a small
+// A price block ($50, regularly $220) over two visit tiles, each with a small
 // drawing: a thermal-camera scan of the back for visit 1, an EMG-style results
 // report with a check for visit 2. Plain SVG and CSS — no images to load, no
 // client JS. The scan line sweeps a few times on load; reduced-motion visitors
