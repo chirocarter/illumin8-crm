@@ -7,6 +7,10 @@ import "server-only";
 import { db, schema as s } from "@/db";
 import { and, eq, or, sql } from "drizzle-orm";
 import { phoneDigits, normalizeDomain } from "./agent-accounts";
+import {
+  type BusinessResearchContact,
+  validateBusinessResearchContact,
+} from "./agent-business-contact";
 
 // ---- bounds on stored research -------------------------------------------
 // SQLite is not a document store. These keep one business's research to a few
@@ -25,6 +29,7 @@ export type ResearchPayload = {
   summary?: string;
   confidence?: string;
   sources?: { url: string; label?: string }[];
+  contact?: BusinessResearchContact;
   researchedAt?: string;
   model?: string;
 };
@@ -89,6 +94,11 @@ export function validateResearch(raw: unknown): { ok: true; value: ResearchPaylo
       sources.push(entry);
     }
     out.sources = sources;
+  }
+  if (r.contact !== undefined && r.contact !== null) {
+    const contact = validateBusinessResearchContact(r.contact);
+    if (!contact.ok) return contact;
+    out.contact = contact.value;
   }
   for (const k of ["researchedAt", "model"] as const) {
     if (r[k] !== undefined && r[k] !== null) {
