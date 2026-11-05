@@ -4,11 +4,16 @@ import { eq } from "drizzle-orm";
 import { authenticateAgent, agentAuthError } from "@/lib/agent-auth";
 import { loadOwnedRun, runUsage, MAX_ACTIVITIES_PER_RUN, STALE_RUN_HOURS } from "@/lib/agent-runs";
 import {
-  findDuplicate, findNameCollision, validateResearch,
+  findDuplicate, findNameCollision, validateResearch, type ResearchPayload,
   MAX_NAME_LENGTH, MAX_FIELD_LENGTH,
 } from "@/lib/agent-prospects";
 import { AI_REVIEW_PENDING, AI_AGENT_SOURCE } from "@/lib/ai-review";
 import { formatPhone } from "@/lib/phone";
+import {
+  type BusinessContactFields,
+  mergeBusinessContactFields,
+  validateBusinessContactClaims,
+} from "@/lib/agent-business-contact";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +66,7 @@ export async function POST(req: NextRequest) {
     return v.trim().slice(0, MAX_FIELD_LENGTH) || undefined;
   };
   const fields: Record<string, string | undefined> = {};
-  for (const k of ["vertical", "area", "address", "phone", "email", "website"]) {
+  for (const k of ["vertical", "area", "address", "phone", "email", "website", "ownerName"]) {
     const v = text(k);
     if (v === null) return Response.json({ error: `"${k}" must be a string` }, { status: 400 });
     if (v !== undefined) fields[k] = v;
@@ -75,12 +80,27 @@ export async function POST(req: NextRequest) {
     fitScore = b.aiFitScore;
   }
 
+  let research: ResearchPayload | undefined;
   let researchJson: string | null = null;
   if (b.aiResearch !== undefined && b.aiResearch !== null) {
     const parsed = validateResearch(b.aiResearch);
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    research = parsed.value;
     researchJson = JSON.stringify(parsed.value);
   }
+
+  const contactFields = mergeBusinessContactFields(
+    {
+      address: fields.address,
+      phone: fields.phone,
+      email: fields.email,
+      ownerName: fields.ownerName,
+    },
+    research?.contact,
+  );
+  Object.assign(fields, contactFields);
+  const claims = validateBusinessContactClaims(research?.summary, contactFields);
+  if (!claims.ok) return Response.json({ error: claims.error }, { status: 400 });
 
   // The run must exist, be owned by this agent AND city, and still be running.
   const lookup = await loadOwnedRun(b.agentRunId, auth.agent, { mustBeRunning: true });
@@ -132,6 +152,7 @@ export async function POST(req: NextRequest) {
     phone: formatPhone(fields.phone ?? null),
     email: fields.email ?? null,
     website: fields.website ?? null,
+    ownerName: fields.ownerName ?? null,
     // status stays at the schema default ("New Prospect"). The review state
     // lives in aiReviewStatus, deliberately not overloaded onto status.
     source: AI_AGENT_SOURCE,
